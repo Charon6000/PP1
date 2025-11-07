@@ -29,6 +29,8 @@
 #define AGAIN_COLOR             7       // Color of Play Again Screen
 #define END_COLOR               8       // Color of End Screen
 #define STAR_COLOR              9       // Stars color
+#define STAR2_COLOR             10      // Stars color while shifting color
+
 
 typedef struct {
 	WINDOW* window; // ncurses window pointer
@@ -53,7 +55,8 @@ typedef struct {
 	int x, y;		            // Position on screen
     int fallingSpeed;           // Stars falling speed
 	int color;		            // Color scheme
-	int animationFrame;		// Color scheme
+	int color2;		            // Color scheme while shifting
+	int animationFrame;		    // Color scheme
 } Star;
 
 void CheckStarsCollision(Swallow* swallow, Star* star)
@@ -189,7 +192,14 @@ void DrawSwallow(WIN* playWin, Swallow* swallow)
 
 void DrawStars(WIN* playWin, Star* star, Swallow* swallow)
 {
-	wattron(playWin->window, COLOR_PAIR(star->color));
+    if(star->animationFrame == 1)
+	    wattron(playWin->window, COLOR_PAIR(star->color));
+    else
+        wattron(playWin->window, COLOR_PAIR(star->color2));
+
+    star->animationFrame += 1;
+    star->animationFrame %= 3;
+    
     mvwprintw(playWin->window, star->y, star->x, "*");
     star->animationFrame+=1;
 
@@ -204,8 +214,6 @@ void DrawStars(WIN* playWin, Star* star, Swallow* swallow)
             star->y %= ROWS-1;
             star->x = rand()%(COLS-1) +1;
         }
-
-        
     }
 
     
@@ -256,7 +264,7 @@ WIN* InitWin(WINDOW* parent, int rows, int cols, int y, int x, int color, int bo
 	return W;
 }
 
-Star** InitStars(WIN* playWin, int color)
+Star** InitStars(WIN* playWin, int color, int color2)
 {
     srand(time(NULL));
     Star** list = (Star**)malloc(MAX_STARS_COUNT * sizeof(Star*));
@@ -268,6 +276,7 @@ Star** InitStars(WIN* playWin, int color)
         tempStar->y = -rand()%ROWS;
         tempStar->fallingSpeed = rand()%MAX_STARS_SPEED+1;
         tempStar->color = color;
+        tempStar->color = color2;
         tempStar->animationFrame = 0;
         list[i] = tempStar;
     }
@@ -318,6 +327,7 @@ WINDOW* Start()
     init_pair(END_COLOR, COLOR_RED, COLOR_BLACK);
     init_pair(AGAIN_COLOR, COLOR_MAGENTA, COLOR_BLACK);
     init_pair(STAR_COLOR, COLOR_YELLOW, COLOR_BLACK);
+    init_pair(STAR2_COLOR, COLOR_WHITE, COLOR_BLACK);
 
     //makes input invisible
     noecho();
@@ -523,7 +533,7 @@ int main()
             SWALLOW_COLOR
         );
 
-        Star** stars = InitStars(playWin, STAR_COLOR);
+        Star** stars = InitStars(playWin, STAR_COLOR, STAR2_COLOR);
         
         wrefresh(mainWin);
 
