@@ -4,13 +4,14 @@
 #include <ncurses.h>    // Text-based UI library
 #include <time.h>
 
-#define START_TIME 1
+#define START_TIME 20
 #define REFRESH_TIME 100
 #define PLAYER_SPEED 1
 #define MAX_STARS_COUNT 10
 #define MAX_STARS_SPEED 2
 
 #define ESCAPE      'q'
+#define REPEAT      'r'
 
 #define BORDER		1		// Border width (in characters)
 #define ROWS		30		// Play window height (rows)
@@ -25,8 +26,9 @@
 #define SWALLOW_COLOR	        4       // Swallow (player) color
 #define HUNTER_COLOR	        5       // Hunter Enemy color
 #define ALBATROS_TAXI_COLOR     6       // Friendly albatros taxi color
-#define EAGLE_BOSS_COLOR        7       // Eagle boss color
-#define STAR_COLOR              8       // Stars color
+#define AGAIN_COLOR             7       // Color of Play Again Screen
+#define END_COLOR               8       // Color of End Screen
+#define STAR_COLOR              9       // Stars color
 
 typedef struct {
 	WINDOW* window; // ncurses window pointer
@@ -299,7 +301,8 @@ WINDOW* Start()
 	init_pair(SWALLOW_COLOR, COLOR_GREEN, COLOR_BLACK);
     init_pair(HUNTER_COLOR, COLOR_RED, COLOR_BLACK);
     init_pair(ALBATROS_TAXI_COLOR, COLOR_BLUE, COLOR_BLACK);
-    init_pair(EAGLE_BOSS_COLOR, COLOR_MAGENTA, COLOR_BLACK);
+    init_pair(END_COLOR, COLOR_RED, COLOR_BLACK);
+    init_pair(AGAIN_COLOR, COLOR_MAGENTA, COLOR_BLACK);
     init_pair(STAR_COLOR, COLOR_YELLOW, COLOR_BLACK);
 
     //makes input invisible
@@ -351,21 +354,23 @@ void UpdateLifeInfo(WIN* lifeinfo, Swallow* swallow, float *timer)
 	mvwprintw(lifeinfo->window, 1, OFFX, life);
 
 	// Display controls
-	mvwprintw(lifeinfo->window, 1, COLS/4, time);
+	mvwprintw(lifeinfo->window, 1, COLS/3-OFFX, time);
 
 	// Update display
 	wrefresh(lifeinfo->window);
 }
 
-void EndScreen(WIN* playWin, char *endText)
+void EndScreen(WIN* playWin)
 {
     CleanWin(playWin, BORDER);
 
     // Set text color
-	wattron(playWin->window, COLOR_RED);
+	wattron(playWin->window, COLOR_PAIR(END_COLOR));
 
 	// Draw border around text
 	box(playWin->window, 0, 0);
+
+    char endText[] = "Bye bye, thanks for playing!";
 
     //Display end text
 	mvwprintw(playWin->window, ROWS/2, (COLS-(sizeof(endText)/sizeof(char)))/2, endText);
@@ -373,6 +378,50 @@ void EndScreen(WIN* playWin, char *endText)
 	// Update display
 	wrefresh(playWin->window);
     sleep(2);
+}
+
+void AgainScreen(WIN* playWin, char *resultText)
+{
+    CleanWin(playWin, BORDER);
+
+    // Set text color
+	wattron(playWin->window, COLOR_PAIR(AGAIN_COLOR));
+
+	// Draw border around text
+	box(playWin->window, 0, 0);
+
+    char* question = "Click 'r' to play again and 'q' if you don't ;)";
+
+    //Display result text
+	mvwprintw(playWin->window, ROWS/2-2, (COLS-(sizeof(resultText)/sizeof(char)))/2.2f, resultText);
+	mvwprintw(playWin->window, ROWS/2, (COLS-(sizeof(question)/sizeof(char)))/3.2f, question);
+
+	// Update display
+	wrefresh(playWin->window);
+}
+
+void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying)
+{
+    int ch;
+    char* resultText;
+    if(swallow->hp >0)
+        resultText = "You won, congarts!";
+    else
+        resultText = "You have lost!";
+    
+    AgainScreen(playWin, resultText);
+
+    while(1)
+    {
+        ch = wgetch(playWin->window);
+        if(ch == ESCAPE)
+        {
+            *isPlaying = false;
+            break;
+        }
+        else if(ch == REPEAT)
+            break;
+    }
 }
 
 void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** stars)
@@ -390,6 +439,7 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** 
         UpdateLifeInfo(lifeWin, swallow, timer);
 
         if(ch == ESCAPE || *timer <= 0) break;
+        else if(*timer <= 0) break;
         else PlayerMovement(swallow, ch, stars);
 
         DrawSwallow(playWin, swallow);
@@ -412,62 +462,71 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** 
 
 int main()
 {
-    WINDOW *mainWin = Start();
+    bool* isPlaying = (bool*)malloc(sizeof(bool));
+    *isPlaying = true;
+    while (*isPlaying)
+    {
+        WINDOW *mainWin = Start();
 
-    WIN *lifeWin = InitWin(
-        mainWin, 
-        LIFEWINY, 
-        COLS/2, 
-        LIFEWINY-1, 
-        OFFY+COLS/4, 
-        STAT_COLOR, 
-        BORDER, 
-        0);
+        WIN *lifeWin = InitWin(
+            mainWin, 
+            LIFEWINY, 
+            COLS/2, 
+            LIFEWINY-1, 
+            OFFY+COLS/4, 
+            STAT_COLOR, 
+            BORDER, 
+            0);
 
-    WIN *playWin = InitWin(
-        mainWin, 
-        ROWS, 
-        COLS, 
-        OFFY, 
-        OFFX, 
-        PLAY_COLOR, 
-        BORDER, 
-        0);
+        WIN *playWin = InitWin(
+            mainWin, 
+            ROWS, 
+            COLS, 
+            OFFY, 
+            OFFX, 
+            PLAY_COLOR, 
+            BORDER, 
+            0);
 
-    WIN *statusWin = InitWin(
-        mainWin, 
-        OFFY, 
-        COLS, 
-        ROWS+OFFY, 
-        OFFX, 
-        STAT_COLOR, 
-        BORDER, 
-        0);
-    
+        WIN *statusWin = InitWin(
+            mainWin, 
+            OFFY, 
+            COLS, 
+            ROWS+OFFY, 
+            OFFX, 
+            STAT_COLOR, 
+            BORDER, 
+            0);
+        
 
-    Swallow* swallow = InitSwallow(
-        playWin,
-        (COLS/2),
-        (ROWS/2),
-        0,
-        -1,
-        PLAYER_SPEED,
-        SWALLOW_COLOR
-    );
+        Swallow* swallow = InitSwallow(
+            playWin,
+            (COLS/2),
+            (ROWS/2),
+            0,
+            -1,
+            PLAYER_SPEED,
+            SWALLOW_COLOR
+        );
 
-    Star** stars = InitStars(playWin, STAR_COLOR);
-    
-    wrefresh(mainWin);
+        Star** stars = InitStars(playWin, STAR_COLOR);
+        
+        wrefresh(mainWin);
 
-    Update(playWin, statusWin, lifeWin, swallow, stars);
+        Update(playWin, statusWin, lifeWin, swallow, stars);
 
-    EndScreen(playWin, "You have lost");
-    endwin();
+        PlayAgain(playWin, swallow, isPlaying);
 
-    // Free allocated memory
-    free(swallow);
-    free(playWin);
-    free(statusWin);
+        if(!(*isPlaying))
+            EndScreen(playWin);
+
+        endwin();
+
+        // Free allocated memory
+        free(swallow);
+        free(playWin);
+        free(statusWin);
+    }
 
     return 0;
 }
