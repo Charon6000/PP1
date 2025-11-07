@@ -12,8 +12,8 @@
 #define ESCAPE      'q'
 
 #define BORDER		1		// Border width (in characters)
-#define ROWS		50		// Play window height (rows)
-#define COLS		200		// Play window width (columns)
+#define ROWS		30		// Play window height (rows)
+#define COLS		100		// Play window width (columns)
 #define OFFY		5		// Y offset from top of screen
 #define LIFEWINY    3		// Height of life status window
 #define OFFX		5		// X offset from left of screen
@@ -53,7 +53,26 @@ typedef struct {
 	int animationFrame;		// Color scheme
 } Star;
 
-void PlayerMovement(Swallow* swallow, int input)
+void CheckStarsCollision(Swallow* swallow, Star* star)
+{
+    if(star->y == swallow->y && (star->x == swallow->x || star->x == swallow->x-1))
+    {
+        star->y = -10;
+        star->x = rand()%(COLS-1) +1;
+        swallow->wallet +=1;
+    }
+}
+
+void CheckSwallowsCollision(Swallow* swallow, Star** stars)
+{
+    for (int i = 0; i < MAX_STARS_COUNT; i++)
+    {
+        CheckStarsCollision(swallow, stars[i]);
+    }
+    
+}
+
+void PlayerMovement(Swallow* swallow, int input, Star** stars)
 {
     switch (input)
     {
@@ -90,18 +109,25 @@ void PlayerMovement(Swallow* swallow, int input)
     default:
         break;
     }
+    for (int i = 0; i < swallow->speed; i++)
+    {
+        swallow->y += swallow->dy;
+        if(swallow->y > 0)
+            swallow->y %= ROWS;
+        else
+            swallow->y = ROWS;
 
-    swallow->y += swallow->dy * swallow->speed;
-    if(swallow->y > 0)
-        swallow->y %= ROWS;
-    else
-        swallow->y = ROWS;
+        swallow->x += swallow->dx;
+        if(swallow->x > 0)
+            swallow->x %= COLS;
+        else
+            swallow->x = COLS;
+        
+            CheckSwallowsCollision(swallow, stars);
+    }
+    
 
-    swallow->x += swallow->dx * swallow->speed;
-    if(swallow->x > 0)
-        swallow->x %= COLS;
-    else
-        swallow->x = COLS;
+    
 }
 
 void DrawSwallow(WIN* playWin, Swallow* swallow)
@@ -154,18 +180,15 @@ void DrawStars(WIN* playWin, Star* star, Swallow* swallow)
     {
         star->y += 1;
 
-        if(star->y == swallow->y && (star->x == swallow->x || star->x == swallow->x-1))
-        {
-            star->y = -10;
-            star->x = rand()%(COLS-1) +1;
-            swallow->wallet +=1;
-        }
+        CheckStarsCollision(swallow, star);
 
         if(star->y >= ROWS-1)
         {
             star->y %= ROWS-1;
             star->x = rand()%(COLS-1) +1;
         }
+
+        
     }
 
     
@@ -321,7 +344,7 @@ void UpdateLifeInfo(WIN* lifeinfo, Swallow* swallow, float *timer)
     char life[50];
     snprintf(life, sizeof(life), "Health Points: %d", swallow->hp);
     char time[50];
-    snprintf(time, sizeof(time), "Time Left: %.2f", *timer);
+    snprintf(time, sizeof(time), "Time Left: %.1f", *timer);
 
     // Display status info
 	mvwprintw(lifeinfo->window, 1, OFFX, life);
@@ -367,8 +390,7 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** 
         *timer += 0.1;
 
         if(ch == ESCAPE) break;
-        else PlayerMovement(swallow, ch);
-
+        else PlayerMovement(swallow, ch, stars);
 
         DrawSwallow(playWin, swallow);
 
