@@ -58,11 +58,14 @@ typedef struct {
 
 void CheckStarsCollision(Swallow* swallow, Star* star)
 {
-    if(star->y == swallow->y && (star->x == swallow->x || star->x == swallow->x-1))
+    for (int i = 0; i < swallow->hp; i++)
     {
-        star->y = -10;
-        star->x = rand()%(COLS-1) +1;
-        swallow->wallet +=1;
+        if(star->y == swallow->y+i && (star->x == swallow->x-i || star->x == swallow->x-(i+1)))
+        {
+            star->y = -10;
+            star->x = rand()%(COLS-1) +1;
+            swallow->wallet +=1;
+        }
     }
 }
 
@@ -140,30 +143,41 @@ void DrawSwallow(WIN* playWin, Swallow* swallow)
     switch (swallow->animationFrame % 4)
     {
     case 0:
-        if(swallow->y >=0 && swallow->x-1>=0)
-        mvwprintw(playWin->window, swallow->y, swallow->x-1, "\\");
-        if(swallow->y >=0 && swallow->x>=0)
-            mvwprintw(playWin->window, swallow->y, swallow->x, "/");
+        for (int i = 0; i < swallow->hp; i++)
+        {
+            if(swallow->y-i >=0 && swallow->x-(i+1)>=0)
+                mvwprintw(playWin->window, swallow->y-i, swallow->x-(i+1), "\\");
+            if(swallow->y-i >=0 && swallow->x+i>=0)
+                mvwprintw(playWin->window, swallow->y-i, swallow->x+i, "/");
+        }
         break;
     case 1:
-        if(swallow->y >=0 && swallow->x-1>=0)
-        mvwprintw(playWin->window, swallow->y, swallow->x-1, "-");
-        if(swallow->y >=0 && swallow->x>=0)
-            mvwprintw(playWin->window, swallow->y, swallow->x, "-");
+        for (int i = 0; i < swallow->hp; i++)
+        {
+            if(swallow->y >=0 && swallow->x-(i+1)-i>=0)
+                mvwprintw(playWin->window, swallow->y, swallow->x-(i+1), "-");
+            if(swallow->y >=0 && swallow->x+i>=0)
+                mvwprintw(playWin->window, swallow->y, swallow->x+i, "-");
+        }
         break;
-
     case 2:
-        if(swallow->y >=0 && swallow->x-1>=0)
-        mvwprintw(playWin->window, swallow->y, swallow->x-1, "/");
-        if(swallow->y >=0 && swallow->x>=0)
-            mvwprintw(playWin->window, swallow->y, swallow->x, "\\");
+        for (int i = 0; i < swallow->hp; i++)
+        {
+            if(swallow->y+i >=0 && swallow->x-(i+1)>=0)
+                mvwprintw(playWin->window, swallow->y+i, swallow->x-(i+1), "/");
+            if(swallow->y+i >=0 && swallow->x+i>=0)
+                mvwprintw(playWin->window, swallow->y+i, swallow->x+i, "\\");
+        }
         break;
 
     case 3:
-        if(swallow->y >=0 && swallow->x-1>=0)
-        mvwprintw(playWin->window, swallow->y, swallow->x-1, "-");
-        if(swallow->y >=0 && swallow->x>=0)
-            mvwprintw(playWin->window, swallow->y, swallow->x, "-");
+        for (int i = 0; i < swallow->hp; i++)
+        {
+            if(swallow->y >=0 && swallow->x-(i+1)>=0)
+                mvwprintw(playWin->window, swallow->y, swallow->x-(i+1), "-");
+            if(swallow->y >=0 && swallow->x+i>=0)
+                mvwprintw(playWin->window, swallow->y, swallow->x+i, "-");
+        }
         break;
     
     default:
