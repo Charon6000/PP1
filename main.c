@@ -8,7 +8,10 @@
 #define REFRESH_TIME 100
 #define PLAYER_SPEED 1
 #define MAX_STARS_COUNT 10
+#define MAX_HUNTERS_COUNT 3
 #define MAX_STARS_SPEED 2
+#define MAX_HUNTERS_SPEED 3
+#define MAX_HUNTERS_BOUNDS 5
 
 #define ESCAPE      'q'
 #define REPEAT      'r'
@@ -46,9 +49,20 @@ typedef struct {
     int wallet;                 // number of gained stars
 	int color;		            // Color scheme
     int dx, dy;                 // directions to move the swallow
-	int animationFrame;		// Color scheme
-	int hp;		            // Health points of swallow
+	int animationFrame;		    // Color scheme
+	int hp;		                // Health points of swallow
 } Swallow;
+
+typedef struct {
+	WIN* playWin;               // Play Window where swallow is shown
+	int x, y;		            // Position on screen
+    int speed;                  // Swallows flying speed
+    int size;                   // Size of Hunter (1-3)
+	int color;		            // Color scheme
+    int dx, dy;                 // directions to move the swallow
+	int animationFrame;		    // Color scheme
+	int boundsCounter;		    // Value of possible bounds
+} Hunter;
 
 typedef struct {
 	WIN* playWin;               // Play Window where star is shown
@@ -68,6 +82,30 @@ void CheckStarsCollision(Swallow* swallow, Star* star)
             star->y = -10;
             star->x = rand()%(COLS-1) +1;
             swallow->wallet +=1;
+        }
+    }
+}
+
+void CheckHuntersCollision(Swallow* swallow, Hunter* hunter)
+{
+    for (int i = 0; i < swallow->hp; i++)
+    {
+        if(hunter->y == swallow->y+i && (hunter->x == swallow->x-i || hunter->x == swallow->x-(i+1)))
+        {
+            //respawn
+            hunter->y = 10;
+            hunter->x = rand()%(COLS-1) +1;
+
+            swallow->hp -=1;
+        }
+
+        if(swallow->y == hunter->y+i && (swallow->x == hunter->x-i || swallow->x == hunter->x-(i+1)))
+        {
+            //respawn
+            hunter->y = 10;
+            hunter->x = rand()%(COLS-1) +1;
+
+            swallow->hp -=1;
         }
     }
 }
@@ -190,6 +228,69 @@ void DrawSwallow(WIN* playWin, Swallow* swallow)
     swallow->animationFrame +=1;
 }
 
+void DrawHunter(WIN* playWin, Hunter* hunter, Swallow* swallow)
+{
+	wattron(playWin->window, COLOR_PAIR(hunter->color));
+
+    switch (hunter->animationFrame % 4)
+    {
+    case 0:
+        for (int i = 0; i < hunter->size; i++)
+        {
+            if(hunter->y-i >=0 && hunter->x-(i+1)>=0)
+                mvwprintw(playWin->window, hunter->y-i, hunter->x-(i+1), "\\");
+            if(hunter->y-i >=0 && hunter->x+i>=0)
+                mvwprintw(playWin->window, hunter->y-i, hunter->x+i, "/");
+        }
+        break;
+    case 1:
+        for (int i = 0; i < hunter->size; i++)
+        {
+            if(hunter->y >=0 && hunter->x-(i+1)-i>=0)
+                mvwprintw(playWin->window, hunter->y, hunter->x-(i+1), "-");
+            if(hunter->y >=0 && hunter->x+i>=0)
+                mvwprintw(playWin->window, hunter->y, hunter->x+i, "-");
+        }
+        break;
+    case 2:
+        for (int i = 0; i < hunter->size; i++)
+        {
+            if(hunter->y+i >=0 && hunter->x-(i+1)>=0)
+                mvwprintw(playWin->window, hunter->y+i, hunter->x-(i+1), "/");
+            if(hunter->y+i >=0 && hunter->x+i>=0)
+                mvwprintw(playWin->window, hunter->y+i, hunter->x+i, "\\");
+        }
+        break;
+
+    case 3:
+        for (int i = 0; i < hunter->size; i++)
+        {
+            if(hunter->y >=0 && hunter->x-(i+1)>=0)
+                mvwprintw(playWin->window, hunter->y, hunter->x-(i+1), "-");
+            if(hunter->y >=0 && hunter->x+i>=0)
+                mvwprintw(playWin->window, hunter->y, hunter->x+i, "-");
+        }
+        break;
+    
+    default:
+        break;
+    }
+
+    hunter->animationFrame +=1;
+
+    for (int i = 0; i < hunter->speed; i++)
+    {
+        //movement
+
+        CheckHuntersCollision(swallow, hunter);
+
+        if(hunter->y >= ROWS-1)
+        {
+            //odbicie
+        }
+    }
+}
+
 void DrawStars(WIN* playWin, Star* star, Swallow* swallow)
 {
     if(star->animationFrame == 1)
@@ -215,9 +316,6 @@ void DrawStars(WIN* playWin, Star* star, Swallow* swallow)
             star->x = rand()%(COLS-1) +1;
         }
     }
-
-    
-
 }
 
 void CleanWin(WIN* W, int border)
@@ -303,6 +401,33 @@ Swallow* InitSwallow(WIN* playWin, int x, int y, int dx, int dy, int speed, int 
     swallow->hp = 3;
 
     return swallow;
+}
+
+Hunter** InitHunters(WIN* playWin, int color)
+{
+    srand(time(NULL));
+    Hunter** list = (Hunter**)malloc(MAX_HUNTERS_COUNT * sizeof(Hunter*));
+    for (int i = 0; i < MAX_HUNTERS_COUNT; i++)
+    {
+        Hunter* tempHunter = (Hunter*)malloc(sizeof(Hunter));
+        tempHunter->playWin = playWin;
+        
+        //spawn
+        tempHunter->x = rand()%COLS;
+        tempHunter->y = rand()%ROWS;
+
+        tempHunter->speed = rand()% MAX_HUNTERS_SPEED +1;
+        tempHunter->size = rand()%3+1;
+        tempHunter->color = color;
+        tempHunter->dx = 0;
+        tempHunter->dy = 0;
+        tempHunter->animationFrame = 0;
+        tempHunter->boundsCounter = rand()% MAX_HUNTERS_BOUNDS;
+        list[i] = tempHunter;
+    }
+
+    return list;
+    
 }
 
 WINDOW* Start()
@@ -401,7 +526,7 @@ void EndScreen(WIN* playWin)
 
 	// Update display
 	wrefresh(playWin->window);
-    sleep(2);
+    sleep(1);
 }
 
 void AgainScreen(WIN* playWin, char *resultText)
@@ -448,7 +573,7 @@ void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying)
     }
 }
 
-void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** stars)
+void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** stars, Hunter** hunters)
 {
     int ch;
     float *timer = (float*)malloc(sizeof(float));
@@ -472,6 +597,12 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** 
         {
             DrawStars(playWin, stars[i], swallow);
         }
+
+        for (int i = 0; i < MAX_HUNTERS_COUNT; i++)
+        {
+            DrawHunter(playWin, hunters[i], swallow);
+        }
+
         
 
         wrefresh(playWin->window);
@@ -535,9 +666,11 @@ int main()
 
         Star** stars = InitStars(playWin, STAR_COLOR, STAR2_COLOR);
         
+        Hunter** hunters = InitHunters(playWin, HUNTER_COLOR);
+        
         wrefresh(mainWin);
 
-        Update(playWin, statusWin, lifeWin, swallow, stars);
+        Update(playWin, statusWin, lifeWin, swallow, stars, hunters);
 
         PlayAgain(playWin, swallow, isPlaying);
 
@@ -548,8 +681,10 @@ int main()
 
         // Free allocated memory
         free(swallow);
+        free(stars);
         free(playWin);
         free(statusWin);
+        free(lifeWin);
     }
 
     return 0;
