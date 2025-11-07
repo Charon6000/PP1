@@ -15,6 +15,7 @@
 #define ROWS		50		// Play window height (rows)
 #define COLS		200		// Play window width (columns)
 #define OFFY		5		// Y offset from top of screen
+#define LIFEWINY    3		// Height of life status window
 #define OFFX		5		// X offset from left of screen
 
 #define MAIN_COLOR	            1		// Main window color
@@ -82,7 +83,8 @@ void PlayerMovement(Swallow* swallow, int input)
         break;
 
     case 'p':
-        swallow->speed = (swallow->speed)%5 +1;
+        if(swallow->speed < 5)
+            swallow->speed = swallow->speed +1;
         break;
     
     default:
@@ -308,6 +310,29 @@ void UpdateStatus(WIN* statusWin, Swallow* swallow)
 	wrefresh(statusWin->window);
 }
 
+void UpdateLifeInfo(WIN* lifeinfo, Swallow* swallow, float *timer)
+{
+    // Set status bar color
+	wattron(lifeinfo->window, COLOR_PAIR(lifeinfo->color));
+
+	// Draw border around status bar
+	box(lifeinfo->window, 0, 0);
+
+    char life[50];
+    snprintf(life, sizeof(life), "Health Points: %d", swallow->hp);
+    char time[50];
+    snprintf(time, sizeof(time), "Time Left: %.2f", *timer);
+
+    // Display status info
+	mvwprintw(lifeinfo->window, 1, OFFX, life);
+
+	// Display controls
+	mvwprintw(lifeinfo->window, 1, COLS/4, time);
+
+	// Update display
+	wrefresh(lifeinfo->window);
+}
+
 void EndScreen(WIN* playWin)
 {
     CleanWin(playWin, BORDER);
@@ -328,17 +353,22 @@ void EndScreen(WIN* playWin)
     sleep(2);
 }
 
-void Update(WIN *playWin, WIN *statusWin, Swallow* swallow, Star** stars)
+void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** stars)
 {
     int ch;
+    float *timer = (float*)malloc(sizeof(float));
+    *timer = 0.0;
     while(1)
     {
         ch = wgetch(playWin->window);
 
         CleanWin(playWin, BORDER);
 
+        *timer += 0.1;
+
         if(ch == ESCAPE) break;
         else PlayerMovement(swallow, ch);
+
 
         DrawSwallow(playWin, swallow);
 
@@ -352,6 +382,8 @@ void Update(WIN *playWin, WIN *statusWin, Swallow* swallow, Star** stars)
 
         UpdateStatus(statusWin, swallow);
 
+        UpdateLifeInfo(lifeWin, swallow, timer);
+
         flushinp();
 
         usleep(REFRESH_TIME * 1000);
@@ -361,6 +393,16 @@ void Update(WIN *playWin, WIN *statusWin, Swallow* swallow, Star** stars)
 int main()
 {
     WINDOW *mainWin = Start();
+
+    WIN *lifeWin = InitWin(
+        mainWin, 
+        LIFEWINY, 
+        COLS/2, 
+        LIFEWINY-1, 
+        OFFY+COLS/4, 
+        STAT_COLOR, 
+        BORDER, 
+        0);
 
     WIN *playWin = InitWin(
         mainWin, 
@@ -382,15 +424,6 @@ int main()
         BORDER, 
         0);
     
-    WIN *lifeWin = InitWin(
-        mainWin, 
-        OFFY, 
-        COLS, 
-        ROWS+OFFY, 
-        OFFX, 
-        STAT_COLOR, 
-        BORDER, 
-        0);
 
     Swallow* swallow = InitSwallow(
         playWin,
@@ -406,7 +439,7 @@ int main()
     
     wrefresh(mainWin);
 
-    Update(playWin, statusWin, swallow, stars);
+    Update(playWin, statusWin, lifeWin, swallow, stars);
 
     EndScreen(playWin);
     endwin();
