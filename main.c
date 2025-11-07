@@ -2,8 +2,9 @@
 #include <stdlib.h>     // Standard library (malloc, free, exit)
 #include <unistd.h>     // Unix standard (usleep for timing)
 #include <ncurses.h>    // Text-based UI library
-#include <time.h>       // Time for random seed
+#include <time.h>
 
+#define START_TIME 1
 #define REFRESH_TIME 100
 #define PLAYER_SPEED 1
 #define MAX_STARS_COUNT 10
@@ -356,7 +357,7 @@ void UpdateLifeInfo(WIN* lifeinfo, Swallow* swallow, float *timer)
 	wrefresh(lifeinfo->window);
 }
 
-void EndScreen(WIN* playWin)
+void EndScreen(WIN* playWin, char *endText)
 {
     CleanWin(playWin, BORDER);
 
@@ -365,8 +366,6 @@ void EndScreen(WIN* playWin)
 
 	// Draw border around text
 	box(playWin->window, 0, 0);
-
-    char endText[] = "You have lost!!!";
 
     //Display end text
 	mvwprintw(playWin->window, ROWS/2, (COLS-(sizeof(endText)/sizeof(char)))/2, endText);
@@ -380,16 +379,17 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** 
 {
     int ch;
     float *timer = (float*)malloc(sizeof(float));
-    *timer = 0.0;
+    *timer = (float)START_TIME;
     while(1)
     {
         ch = wgetch(playWin->window);
 
         CleanWin(playWin, BORDER);
 
-        *timer += 0.1;
+        *timer -= 0.1;
+        UpdateLifeInfo(lifeWin, swallow, timer);
 
-        if(ch == ESCAPE) break;
+        if(ch == ESCAPE || *timer <= 0) break;
         else PlayerMovement(swallow, ch, stars);
 
         DrawSwallow(playWin, swallow);
@@ -403,8 +403,6 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** 
         wrefresh(playWin->window);
 
         UpdateStatus(statusWin, swallow);
-
-        UpdateLifeInfo(lifeWin, swallow, timer);
 
         flushinp();
 
@@ -463,7 +461,7 @@ int main()
 
     Update(playWin, statusWin, lifeWin, swallow, stars);
 
-    EndScreen(playWin);
+    EndScreen(playWin, "You have lost");
     endwin();
 
     // Free allocated memory
