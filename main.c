@@ -4,7 +4,7 @@
 #include <ncurses.h>    // Text-based UI library
 #include <time.h>
 
-#define START_TIME 20
+#define START_TIME 60
 #define REFRESH_TIME 100
 #define PLAYER_SPEED 1
 #define MAX_STARS_COUNT 10
@@ -54,9 +54,8 @@ typedef struct {
 } Swallow;
 
 typedef struct {
-	WIN* playWin;               // Play Window where swallow is shown
+	WIN* playWin;               // Play Window where hunter is shown
 	int x, y;		            // Position on screen
-    int speed;                  // Swallows flying speed
     int size;                   // Size of Hunter (1-3)
 	int color;		            // Color scheme
     int dx, dy;                 // directions to move the swallow
@@ -232,6 +231,10 @@ void DrawHunter(WIN* playWin, Hunter* hunter, Swallow* swallow)
 {
 	wattron(playWin->window, COLOR_PAIR(hunter->color));
 
+    char counter[2];
+    snprintf(counter, sizeof(counter), "%d", hunter->boundsCounter);
+    mvwprintw(playWin->window, hunter->y-1, hunter->x, counter);
+
     switch (hunter->animationFrame % 4)
     {
     case 0:
@@ -278,16 +281,69 @@ void DrawHunter(WIN* playWin, Hunter* hunter, Swallow* swallow)
 
     hunter->animationFrame +=1;
 
-    for (int i = 0; i < hunter->speed; i++)
+    
+    int tempdy = hunter->dy;
+    int tempdx = hunter->dx;
+
+    CheckHuntersCollision(swallow, hunter);
+
+    
+    while(tempdy != 0 || tempdx != 0)
     {
-        //movement
+
+        if(tempdy> 0)
+        {
+            hunter->y += 1;
+            tempdy -=1;
+        }
+        else if(tempdy < 0)
+        {
+            hunter->y -= 1;
+            tempdy +=1;
+        }
+
+        if(tempdx> 0)
+        {
+            hunter->x += 1;
+            tempdx -=1;
+        }
+        else if(tempdx < 0)
+        {
+            hunter->x -= 1;
+            tempdx +=1;
+        }
+
+        if(hunter->y <= 0)
+        {
+            hunter->y = 0;
+            hunter->dy *= -1;
+            tempdy *= -1;
+            hunter->boundsCounter -= 1;
+        }
+        else if(hunter->y >= ROWS-1)
+        {
+            hunter->y = ROWS-1;
+            hunter->dy *= -1;
+            tempdy *= -1;
+            hunter->boundsCounter -= 1;
+        }
+
+        if(hunter->x <= 0)
+        {
+            hunter->x = 0;
+            hunter->dx *= -1;
+            tempdx *= -1;
+            hunter->boundsCounter -= 1;
+        }
+        else if(hunter->x >= COLS-1)
+        {
+            hunter->x = COLS-1;
+            hunter->dx *= -1;
+            tempdx *= -1;
+            hunter->boundsCounter -= 1;
+        }
 
         CheckHuntersCollision(swallow, hunter);
-
-        if(hunter->y >= ROWS-1)
-        {
-            //odbicie
-        }
     }
 }
 
@@ -411,18 +467,23 @@ Hunter** InitHunters(WIN* playWin, int color)
     {
         Hunter* tempHunter = (Hunter*)malloc(sizeof(Hunter));
         tempHunter->playWin = playWin;
-        
+
+        tempHunter->dx = 0;
+        tempHunter->dy = 0;
+        while(tempHunter->dx == 0)
+            tempHunter->dx = rand()%(2*MAX_HUNTERS_SPEED)-MAX_HUNTERS_SPEED;
+
+        while(tempHunter->dy == 0)
+            tempHunter->dy = rand()%(2*MAX_HUNTERS_SPEED)-MAX_HUNTERS_SPEED;
+
         //spawn
         tempHunter->x = rand()%COLS;
         tempHunter->y = rand()%ROWS;
 
-        tempHunter->speed = rand()% MAX_HUNTERS_SPEED +1;
         tempHunter->size = rand()%3+1;
         tempHunter->color = color;
-        tempHunter->dx = 0;
-        tempHunter->dy = 0;
         tempHunter->animationFrame = 0;
-        tempHunter->boundsCounter = rand()% MAX_HUNTERS_BOUNDS;
+        tempHunter->boundsCounter = rand()% MAX_HUNTERS_BOUNDS+1;
         list[i] = tempHunter;
     }
 
@@ -587,7 +648,7 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** 
         *timer -= 0.1;
         UpdateLifeInfo(lifeWin, swallow, timer);
 
-        if(ch == ESCAPE || *timer <= 0) break;
+        if(ch == ESCAPE || *timer <= 0 || swallow->hp<= 0) break;
         else if(*timer <= 0) break;
         else PlayerMovement(swallow, ch, stars);
 
