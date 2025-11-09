@@ -17,8 +17,8 @@
 #define REPEAT      'r'
 
 #define BORDER		1		// Border width (in characters)
-#define ROWS		30		// Play window height (rows)
-#define COLS		100		// Play window width (columns)
+#define ROWS		20		// Play window height (rows)
+#define COLS		120		// Play window width (columns)
 #define OFFY		5		// Y offset from top of screen
 #define LIFEWINY    3		// Height of life status window
 #define OFFX		5		// X offset from left of screen
@@ -74,38 +74,29 @@ typedef struct {
 
 void CheckStarsCollision(Swallow* swallow, Star* star)
 {
-    for (int i = 0; i < swallow->hp; i++)
+    float dx = star->x-swallow->x;
+    float dy = star->y-swallow->y;
+    if((dx*dx+dy*dy) <= (swallow->hp * swallow->hp))
     {
-        if(star->y == swallow->y+i && (star->x == swallow->x-i || star->x == swallow->x-(i+1)))
-        {
-            star->y = -10;
-            star->x = rand()%(COLS-1) +1;
-            swallow->wallet +=1;
-        }
+        //respawn
+        star->y = -10;
+        star->x = rand()%(COLS-1) +1;
+        swallow->wallet +=1;
     }
 }
 
 void CheckHuntersCollision(Swallow* swallow, Hunter* hunter)
 {
-    for (int i = 0; i < swallow->hp; i++)
+    float dx = hunter->x-swallow->x;
+    float dy = hunter->y-swallow->y;
+    float distance =dx*dx+dy*dy;
+    if(distance <= (swallow->hp * swallow->hp) || distance <= (hunter->size * hunter->size))
     {
-        if(hunter->y == swallow->y+i && (hunter->x == swallow->x-i || hunter->x == swallow->x-(i+1)))
-        {
-            //respawn
-            hunter->y = 10;
-            hunter->x = rand()%(COLS-1) +1;
+        //respawn
+        hunter->y = 10;
+        hunter->x = rand()%(COLS-1) +1;
 
-            swallow->hp -=1;
-        }
-
-        if(swallow->y == hunter->y+i && (swallow->x == hunter->x-i || swallow->x == hunter->x-(i+1)))
-        {
-            //respawn
-            hunter->y = 10;
-            hunter->x = rand()%(COLS-1) +1;
-
-            swallow->hp -=1;
-        }
+        swallow->hp -=1;
     }
 }
 
@@ -180,43 +171,44 @@ void DrawSwallow(WIN* playWin, Swallow* swallow)
 {
 	wattron(playWin->window, COLOR_PAIR(swallow->color));
 
+    int y = swallow->y-swallow->hp/2;
     switch (swallow->animationFrame % 4)
     {
     case 0:
         for (int i = 0; i < swallow->hp; i++)
         {
-            if(swallow->y-i >=0 && swallow->x-(i+1)>=0)
-                mvwprintw(playWin->window, swallow->y-i, swallow->x-(i+1), "\\");
-            if(swallow->y-i >=0 && swallow->x+i>=0)
-                mvwprintw(playWin->window, swallow->y-i, swallow->x+i, "/");
+            if(y-i >=0 && swallow->x-(i+1)>=0)
+                mvwprintw(playWin->window, y-i, swallow->x-(i+1), "\\");
+            if(y-i >=0 && swallow->x+i>=0)
+                mvwprintw(playWin->window, y-i, swallow->x+i, "/");
         }
         break;
     case 1:
         for (int i = 0; i < swallow->hp; i++)
         {
-            if(swallow->y >=0 && swallow->x-(i+1)-i>=0)
-                mvwprintw(playWin->window, swallow->y, swallow->x-(i+1), "-");
-            if(swallow->y >=0 && swallow->x+i>=0)
-                mvwprintw(playWin->window, swallow->y, swallow->x+i, "-");
+            if(y >=0 && swallow->x-(i+1)-i>=0)
+                mvwprintw(playWin->window, y, swallow->x-(i+1), "-");
+            if(y >=0 && swallow->x+i>=0)
+                mvwprintw(playWin->window, y, swallow->x+i, "-");
         }
         break;
     case 2:
         for (int i = 0; i < swallow->hp; i++)
         {
-            if(swallow->y+i >=0 && swallow->x-(i+1)>=0)
-                mvwprintw(playWin->window, swallow->y+i, swallow->x-(i+1), "/");
-            if(swallow->y+i >=0 && swallow->x+i>=0)
-                mvwprintw(playWin->window, swallow->y+i, swallow->x+i, "\\");
+            if(y+i >=0 && swallow->x-(i+1)>=0)
+                mvwprintw(playWin->window, y+i, swallow->x-(i+1), "/");
+            if(y+i >=0 && swallow->x+i>=0)
+                mvwprintw(playWin->window, y+i, swallow->x+i, "\\");
         }
         break;
 
     case 3:
         for (int i = 0; i < swallow->hp; i++)
         {
-            if(swallow->y >=0 && swallow->x-(i+1)>=0)
-                mvwprintw(playWin->window, swallow->y, swallow->x-(i+1), "-");
-            if(swallow->y >=0 && swallow->x+i>=0)
-                mvwprintw(playWin->window, swallow->y, swallow->x+i, "-");
+            if(y >=0 && swallow->x-(i+1)>=0)
+                mvwprintw(playWin->window, y, swallow->x-(i+1), "-");
+            if(y >=0 && swallow->x+i>=0)
+                mvwprintw(playWin->window, y, swallow->x+i, "-");
         }
         break;
     
@@ -235,43 +227,44 @@ void DrawHunter(WIN* playWin, Hunter* hunter, Swallow* swallow)
     snprintf(counter, sizeof(counter), "%d", hunter->boundsCounter);
     mvwprintw(playWin->window, hunter->y-1, hunter->x, counter);
 
+    int y = hunter->y-hunter->size;
     switch (hunter->animationFrame % 4)
     {
     case 0:
         for (int i = 0; i < hunter->size; i++)
         {
-            if(hunter->y-i >=0 && hunter->x-(i+1)>=0)
-                mvwprintw(playWin->window, hunter->y-i, hunter->x-(i+1), "\\");
-            if(hunter->y-i >=0 && hunter->x+i>=0)
-                mvwprintw(playWin->window, hunter->y-i, hunter->x+i, "/");
+            if(y-i >=0 && hunter->x-(i+1)>=0)
+                mvwprintw(playWin->window, y-i, hunter->x-(i+1), "\\");
+            if(y-i >=0 && hunter->x+i>=0)
+                mvwprintw(playWin->window, y-i, hunter->x+i, "/");
         }
         break;
     case 1:
         for (int i = 0; i < hunter->size; i++)
         {
-            if(hunter->y >=0 && hunter->x-(i+1)-i>=0)
-                mvwprintw(playWin->window, hunter->y, hunter->x-(i+1), "-");
-            if(hunter->y >=0 && hunter->x+i>=0)
-                mvwprintw(playWin->window, hunter->y, hunter->x+i, "-");
+            if(y >=0 && hunter->x-(i+1)-i>=0)
+                mvwprintw(playWin->window, y, hunter->x-(i+1), "-");
+            if(y >=0 && hunter->x+i>=0)
+                mvwprintw(playWin->window, y, hunter->x+i, "-");
         }
         break;
     case 2:
         for (int i = 0; i < hunter->size; i++)
         {
-            if(hunter->y+i >=0 && hunter->x-(i+1)>=0)
-                mvwprintw(playWin->window, hunter->y+i, hunter->x-(i+1), "/");
-            if(hunter->y+i >=0 && hunter->x+i>=0)
-                mvwprintw(playWin->window, hunter->y+i, hunter->x+i, "\\");
+            if(y+i >=0 && hunter->x-(i+1)>=0)
+                mvwprintw(playWin->window, y+i, hunter->x-(i+1), "/");
+            if(y+i >=0 && hunter->x+i>=0)
+                mvwprintw(playWin->window, y+i, hunter->x+i, "\\");
         }
         break;
 
     case 3:
         for (int i = 0; i < hunter->size; i++)
         {
-            if(hunter->y >=0 && hunter->x-(i+1)>=0)
-                mvwprintw(playWin->window, hunter->y, hunter->x-(i+1), "-");
-            if(hunter->y >=0 && hunter->x+i>=0)
-                mvwprintw(playWin->window, hunter->y, hunter->x+i, "-");
+            if(y >=0 && hunter->x-(i+1)>=0)
+                mvwprintw(playWin->window, y, hunter->x-(i+1), "-");
+            if(y >=0 && hunter->x+i>=0)
+                mvwprintw(playWin->window, y, hunter->x+i, "-");
         }
         break;
     
