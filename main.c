@@ -8,9 +8,9 @@
 #define REFRESH_TIME 100
 #define PLAYER_SPEED 1
 #define MAX_STARS_COUNT 10
-#define MAX_HUNTERS_COUNT 3
+#define MAX_HUNTERS_COUNT 6
 #define MAX_STARS_SPEED 2
-#define MAX_HUNTERS_SPEED 3
+#define MAX_HUNTERS_SPEED 2
 #define MAX_HUNTERS_BOUNDS 5
 
 #define ESCAPE      'q'
@@ -62,7 +62,8 @@ typedef struct {
     float a, b;                 // Values of func to move huntery=ax+b
     int speed;                  // Hunters speed
 	int animationFrame;		    // Color scheme
-	int boundsCounter;		    // Value of possible bounds
+    int boundsCounter;		    // Value of possible bounds
+    short int onTheScreen;		    // Says if the hunter already jumped on the screen (0-1)
 } Hunter;
 
 typedef struct {
@@ -73,6 +74,31 @@ typedef struct {
 	int color2;		            // Color scheme while shifting
 	int animationFrame;		    // Color scheme
 } Star;
+
+void SpawnHunter(Hunter* tempHunter, Swallow* swallow)
+{
+    tempHunter->speed = rand() % MAX_HUNTERS_SPEED + 1;
+
+    tempHunter->onTheScreen = false;
+    tempHunter->x = COLS * (rand() % 2 );
+    tempHunter->y = rand() % ROWS;
+
+    if (tempHunter->x < swallow->x)
+        tempHunter->dx = 1;
+    else
+        tempHunter->dx = -1;
+
+    if (tempHunter->x - swallow->x != 0)
+        tempHunter->a = (tempHunter->y - swallow->y) / (tempHunter->x - swallow->x);
+    else
+        tempHunter->a = 0;
+
+    tempHunter->b = swallow->y - (tempHunter->a * swallow->x);
+
+    tempHunter->size = rand() % 3 + 1;
+    tempHunter->animationFrame = 0;
+    tempHunter->boundsCounter = rand() % MAX_HUNTERS_BOUNDS + 1;
+}
 
 void CheckStarsCollision(Swallow* swallow, Star* star)
 {
@@ -95,9 +121,7 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter)
     float distance =dx*dx+dy*dy;
     if(distance <= (minimum_distance * minimum_distance))
     {
-        //respawn
-        hunter->y = 10;
-        hunter->x = rand()%(COLS-1) +1;
+        SpawnHunter(hunter, swallow);
 
         swallow->hp -=1;
     }
@@ -232,17 +256,29 @@ void MoveHunter(Hunter* hunter, Swallow* swallow)
     {
         hunter->x += hunter->dx;
         hunter->y = (hunter->a * hunter->x) + hunter->b;
+
+        if (hunter->onTheScreen == 0)
+        {
+            if (hunter->x <= COLS - 2 && hunter->x >= 1 && hunter->y <= ROWS - 2 && hunter->y >= 0)
+                hunter->onTheScreen = 1;
+            else
+                break;
+        }
+        
+
         if (hunter->y < 0)
         {
             hunter->y = 0;
             hunter->a *= -1;
             hunter->b = hunter->y - (hunter->a * hunter->x);
+            hunter->boundsCounter--;
         }
         else if (hunter->y > ROWS - 2)
         {
             hunter->y = ROWS - 2;
             hunter->a *= -1;
             hunter->b = hunter->y - (hunter->a * hunter->x);
+            hunter->boundsCounter--;
         }
 
 
@@ -252,6 +288,7 @@ void MoveHunter(Hunter* hunter, Swallow* swallow)
             hunter->a *= -1;
             hunter->b = hunter->y - (hunter->a * hunter->x);
             hunter->dx *= -1;
+            hunter->boundsCounter--;
         }
         else if (hunter->x > COLS - 2)
         {
@@ -259,73 +296,14 @@ void MoveHunter(Hunter* hunter, Swallow* swallow)
             hunter->a *= -1;
             hunter->b = hunter->y - (hunter->a * hunter->x);
             hunter->dx *= -1;
+            hunter->boundsCounter--;
         }
+
+        if (hunter->boundsCounter <= 0)
+            SpawnHunter(hunter, swallow);
 
         CheckHuntersCollision(swallow, hunter);
     }
-    /*int tempdy = hunter->dy;
-    int tempdx = hunter->dx;
-
-    CheckHuntersCollision(swallow, hunter);
-
-    //movement
-    /*while(tempdy != 0 || tempdx != 0)
-    {
-
-        if(tempdy> 0)
-        {
-            hunter->y += 1;
-            tempdy -=1;
-        }
-        else if(tempdy < 0)
-        {
-            hunter->y -= 1;
-            tempdy +=1;
-        }
-
-        if(tempdx> 0)
-        {
-            hunter->x += 1;
-            tempdx -=1;
-        }
-        else if(tempdx < 0)
-        {
-            hunter->x -= 1;
-            tempdx +=1;
-        }
-
-        if(hunter->y <= 0)
-        {
-            hunter->y = 0;
-            hunter->dy *= -1;
-            tempdy *= -1;
-            hunter->boundsCounter -= 1;
-        }
-        else if(hunter->y >= ROWS-1)
-        {
-            hunter->y = ROWS-1;
-            hunter->dy *= -1;
-            tempdy *= -1;
-            hunter->boundsCounter -= 1;
-        }
-
-        if(hunter->x <= 0)
-        {
-            hunter->x = 0;
-            hunter->dx *= -1;
-            tempdx *= -1;
-            hunter->boundsCounter -= 1;
-        }
-        else if(hunter->x >= COLS-1)
-        {
-            hunter->x = COLS-1;
-            hunter->dx *= -1;
-            tempdx *= -1;
-            hunter->boundsCounter -= 1;
-        }
-
-        CheckHuntersCollision(swallow, hunter);
-    }*/
 }
 
 void DrawHunter(WIN* playWin, Hunter* hunter, Swallow* swallow)
@@ -456,7 +434,6 @@ WIN* InitWin(WINDOW* parent, int rows, int cols, int y, int x, int color, int bo
 
 Star** InitStars(WIN* playWin, int color, int color2)
 {
-    srand(time(NULL));
     Star** list = (Star**)malloc(MAX_STARS_COUNT * sizeof(Star*));
     for (int i = 0; i < MAX_STARS_COUNT; i++)
     {
@@ -497,36 +474,14 @@ Swallow* InitSwallow(WIN* playWin, int x, int y, int dx, int dy, int speed, int 
 
 Hunter** InitHunters(WIN* playWin, int color, Swallow* swallow)
 {
-    srand(time(NULL));
     Hunter** list = (Hunter**)malloc(MAX_HUNTERS_COUNT * sizeof(Hunter*));
     for (int i = 0; i < MAX_HUNTERS_COUNT; i++)
     {
         Hunter* tempHunter = (Hunter*)malloc(sizeof(Hunter));
         tempHunter->playWin = playWin;
-        tempHunter->speed = rand() % MAX_HUNTERS_SPEED+1;
+        SpawnHunter(tempHunter, swallow);
 
-        
-
-        //spawn
-        tempHunter->x = rand()%COLS;
-        tempHunter->y = rand()%ROWS;
-
-        if (tempHunter->x < swallow->x)
-            tempHunter->dx = 1;
-        else
-            tempHunter->dx = -1;
-
-        if (tempHunter->x - swallow->x != 0)
-            tempHunter->a = (tempHunter->y - swallow->y) / (tempHunter->x - swallow->x);
-        else
-            tempHunter->a = 0;
-
-        tempHunter->b = swallow->y - (tempHunter->a * swallow->x);
-
-        tempHunter->size = rand()%3+1;
         tempHunter->color = color;
-        tempHunter->animationFrame = 0;
-        tempHunter->boundsCounter = rand()% MAX_HUNTERS_BOUNDS+1;
         list[i] = tempHunter;
     }
 
@@ -722,6 +677,7 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** 
 
 int main()
 {
+    srand(42);
     bool* isPlaying = (bool*)malloc(sizeof(bool));
     *isPlaying = true;
     while (*isPlaying)
