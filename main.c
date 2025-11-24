@@ -1,27 +1,27 @@
-#include <stdio.h>      // Standard input/output (printf, fprintf)
-#include <stdlib.h>     // Standard library (malloc, free, exit)
-#include <unistd.h>     // Unix standard (usleep for timing)
-#include <ncurses.h>    // Text-based UI library
-#include <time.h>
+#include <stdio.h>                      // Standard input/output (printf, fprintf)
+#include <stdlib.h>                     // Standard library (malloc, free, exit)
+#include <unistd.h>                     // Unix standard (usleep for timing)
+#include <ncurses.h>                    // Text-based UI library
+#include <time.h>                       // Time needed to random the seed
 
-#define START_TIME 60
-#define REFRESH_TIME 100
-#define PLAYER_SPEED 1
-#define MAX_STARS_COUNT 10
-#define MAX_HUNTERS_COUNT 6
-#define MAX_STARS_SPEED 2
-#define MAX_HUNTERS_SPEED 2
-#define MAX_HUNTERS_BOUNDS 5
+#define START_TIME 60                   // Time to survive in the game
+#define REFRESH_TIME 100                // Frequency of refreshing the screen
+#define START_PLAYER_SPEED 1            // Speed that player have on the start of a game
+#define MAX_STARS_COUNT 10              // Maximum amound of stars showed at the same time
+#define MAX_HUNTERS_COUNT 6             // Maximum amound of hunters in game
+#define MAX_STARS_SPEED 2               // Maximum speed that star can have
+#define MAX_HUNTERS_SPEED 2             // Maximum speed that hunter can have
+#define MAX_HUNTERS_BOUNDS 5            // Maximum amound of bounces that hunter can make
 
-#define ESCAPE      'q'
-#define REPEAT      'r'
+#define ESCAPE      'q'                 // Button to quit the game
+#define REPEAT      'r'                 // Button to play again
 
-#define BORDER		1		// Border width (in characters)
-#define ROWS		50		// Play window height (rows)
-#define COLS		120		// Play window width (columns)
-#define OFFY		5		// Y offset from top of screen
-#define LIFEWINY    3		// Height of life status window
-#define OFFX		5		// X offset from left of screen
+#define BORDER		1		            // Border width (in characters)
+#define ROWS		40		            // Play window height (rows)
+#define COLS		120		            // Play window width (columns)
+#define OFFY		5		            // Y offset from top of screen
+#define LIFEWINY    3		            // Height of life status window
+#define OFFX		5		            // X offset from left of screen
 
 #define MAIN_COLOR	            1		// Main window color
 #define STAT_COLOR	            2		// Status bar color
@@ -31,15 +31,15 @@
 #define ALBATROS_TAXI_COLOR     6       // Friendly albatros taxi color
 #define AGAIN_COLOR             7       // Color of Play Again Screen
 #define END_COLOR               8       // Color of End Screen
-#define STAR_COLOR              9       // Stars color
-#define STAR2_COLOR             10      // Stars color while shifting color
+#define STAR_COLOR              9       // First stars color while shifting color
+#define STAR2_COLOR             10      // Second stars color while shifting color
 
 
 typedef struct {
-	WINDOW* window; // ncurses window pointer
-	int x, y;       // Position on screen
-	int rows, cols; // Size of window
-	int color;		// Color scheme
+	WINDOW* window;             // ncurses window pointer
+	int x, y;                   // Position on screen
+	int rows, cols;             // Size of window
+	int color;		            // Color scheme
 } WIN;
 
 typedef struct {
@@ -63,7 +63,7 @@ typedef struct {
     int speed;                  // Hunters speed
 	int animationFrame;		    // Color scheme
     int boundsCounter;		    // Value of possible bounds
-    short int onTheScreen;		    // Says if the hunter already jumped on the screen (0-1)
+    short int onTheScreen;		// Says if the hunter already jumped on the screen (0-1)
 } Hunter;
 
 typedef struct {
@@ -89,7 +89,7 @@ void SpawnHunter(Hunter* tempHunter, Swallow* swallow)
         tempHunter->dx = -1;
 
     if (tempHunter->x - swallow->x != 0)
-        tempHunter->a = (tempHunter->y - swallow->y) / (tempHunter->x - swallow->x);
+        tempHunter->a = (float)(tempHunter->y - swallow->y) / (float)(tempHunter->x - swallow->x);
     else
         tempHunter->a = 0;
 
@@ -717,11 +717,11 @@ int main()
 
         Swallow* swallow = InitSwallow(
             playWin,
-            20,
-            20,
+            COLS/2,
+            ROWS/2,
             0,
             -1,
-            PLAYER_SPEED,
+            START_PLAYER_SPEED,
             SWALLOW_COLOR
         );
 
