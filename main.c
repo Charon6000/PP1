@@ -5,12 +5,7 @@
 #include <time.h>                       // Time needed to random the seed
 
 #define REFRESH_TIME 100                // Frequency of refreshing the screen
-#define START_PLAYER_SPEED 1            // Speed that player have on the start of a game
-#define MAX_STARS_COUNT 10              
-#define MAX_HUNTERS_COUNT 6             
-#define MAX_STARS_SPEED 2               
-#define MAX_HUNTERS_SPEED 2             
-#define MAX_HUNTERS_BOUNDS 5            
+#define START_PLAYER_SPEED 1            // Speed that player have on the start of a game     
 
 #define ESCAPE      'q'                 // Button to quit the game
 #define REPEAT      'r'                 // Button to play again
@@ -39,6 +34,7 @@ typedef struct {
     int seed;                   // Number of seed to randomize the game
     int max_stars_count;        // Maximum amound of stars showed at the same time
     int max_stars_speed;        // Maximum speed that star can have
+    int max_hunters_size;       // Maximum size of hunter
     int max_hunters_count;      // Maximum amound of hunters in game
     int max_hunters_speed;      // Maximum speed that hunter can have
     int max_hunters_bounds;     // Maximum amound of bounces that hunter can make
@@ -86,9 +82,9 @@ typedef struct {
 	int animationFrame;		    // Color scheme
 } Star;
 
-void SpawnHunter(Hunter* tempHunter, Swallow* swallow)
+void SpawnHunter(Hunter* tempHunter, Swallow* swallow, CONFIG_FILE* config)
 {
-    tempHunter->speed = rand() % MAX_HUNTERS_SPEED + 1;
+    tempHunter->speed = rand() % config->max_hunters_speed + 1;
 
     tempHunter->onTheScreen = false;
     tempHunter->x = COLS * (rand() % 2 );
@@ -106,9 +102,9 @@ void SpawnHunter(Hunter* tempHunter, Swallow* swallow)
 
     tempHunter->b = swallow->y - (tempHunter->a * swallow->x);
 
-    tempHunter->size = rand() % 3 + 1;
+    tempHunter->size = rand() % config->max_hunters_size + 1;
     tempHunter->animationFrame = 0;
-    tempHunter->boundsCounter = rand() % MAX_HUNTERS_BOUNDS + 1;
+    tempHunter->boundsCounter = rand() % config->max_hunters_bounds + 1;
 }
 
 CONFIG_FILE* getConfigInfo(char* adress)
@@ -130,6 +126,7 @@ CONFIG_FILE* getConfigInfo(char* adress)
         "seed = %i\n"
         "max stars count = %d\n"
         "max stars speed = %d\n"
+        "max hunters size = %d\n"
         "max hunters count = %d\n"
         "max hunters speed = %d\n"
         "max hunters bounds = %d\n"
@@ -138,7 +135,8 @@ CONFIG_FILE* getConfigInfo(char* adress)
         &cfile->seed, 
         &cfile->max_stars_count, 
         &cfile->max_stars_speed, 
-        &cfile->max_hunters_count, 
+        &cfile->max_hunters_size,
+        &cfile->max_hunters_count,
         &cfile->max_hunters_speed, 
         &cfile->max_hunters_bounds, 
         &cfile->max_swallow_health);
@@ -161,7 +159,7 @@ void CheckStarsCollision(Swallow* swallow, Star* star)
     }
 }
 
-void CheckHuntersCollision(Swallow* swallow, Hunter* hunter)
+void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config)
 {
     float dx = hunter->x-swallow->x;
     float dy = hunter->y-swallow->y;
@@ -169,27 +167,27 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter)
     float distance =dx*dx+dy*dy;
     if(distance <= (minimum_distance * minimum_distance))
     {
-        SpawnHunter(hunter, swallow);
+        SpawnHunter(hunter, swallow, config);
 
         swallow->hp -=1;
     }
 }
 
-void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters)
+void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CONFIG_FILE* config)
 {
-    for (int i = 0; i < MAX_STARS_COUNT; i++)
+    for (int i = 0; i < config->max_stars_count; i++)
     {
         CheckStarsCollision(swallow, stars[i]);
     }
     
-    for (int i = 0; i < MAX_HUNTERS_COUNT; i++)
+    for (int i = 0; i < config->max_hunters_count; i++)
     {
-        CheckHuntersCollision(swallow, hunters[i]);
+        CheckHuntersCollision(swallow, hunters[i], config);
     }
     
 }
 
-void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters)
+void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters, CONFIG_FILE* config)
 {
     switch (input)
     {
@@ -240,7 +238,7 @@ void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters)
         else
             swallow->x = COLS;
         
-            CheckSwallowsCollision(swallow, stars, hunters);
+        CheckSwallowsCollision(swallow, stars, hunters, config);
     }
     
 
@@ -298,7 +296,7 @@ void DrawSwallow(WIN* playWin, Swallow* swallow)
     swallow->animationFrame +=1;
 }
 
-void MoveHunter(Hunter* hunter, Swallow* swallow)
+void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config)
 {
     for (int i = 0; i < hunter->speed; i++)
     {
@@ -348,9 +346,9 @@ void MoveHunter(Hunter* hunter, Swallow* swallow)
         }
 
         if (hunter->boundsCounter <= 0)
-            SpawnHunter(hunter, swallow);
+            SpawnHunter(hunter, swallow, config);
 
-        CheckHuntersCollision(swallow, hunter);
+        CheckHuntersCollision(swallow, hunter, config);
     }
 }
 
@@ -480,16 +478,16 @@ WIN* InitWin(WINDOW* parent, int rows, int cols, int y, int x, int color, int bo
 	return W;
 }
 
-Star** InitStars(WIN* playWin, int color, int color2)
+Star** InitStars(WIN* playWin, int color, int color2, CONFIG_FILE* config)
 {
-    Star** list = (Star**)malloc(MAX_STARS_COUNT * sizeof(Star*));
-    for (int i = 0; i < MAX_STARS_COUNT; i++)
+    Star** list = (Star**)malloc(config->max_stars_count * sizeof(Star*));
+    for (int i = 0; i < config->max_stars_count; i++)
     {
         Star* tempStar = (Star*)malloc(sizeof(Star));
         tempStar->playWin = playWin;
         tempStar->x = rand()%COLS;
         tempStar->y = -rand()%ROWS;
-        tempStar->fallingSpeed = rand()%MAX_STARS_SPEED+1;
+        tempStar->fallingSpeed = rand()%config->max_stars_speed+1;
         tempStar->color = color;
         tempStar->color = color2;
         tempStar->animationFrame = 0;
@@ -500,7 +498,7 @@ Star** InitStars(WIN* playWin, int color, int color2)
     
 }
 
-Swallow* InitSwallow(WIN* playWin, int x, int y, int dx, int dy, int speed, int color)
+Swallow* InitSwallow(WIN* playWin, int x, int y, int dx, int dy, int speed, int color, CONFIG_FILE* config)
 {
     //Allocating memory for Swallow
     Swallow* swallow = (Swallow*)malloc(sizeof(Swallow));
@@ -512,22 +510,22 @@ Swallow* InitSwallow(WIN* playWin, int x, int y, int dx, int dy, int speed, int 
     swallow->dx = dx;
     swallow->dy = dy;
     swallow->wallet = 0;
-    swallow->speed = speed;
+    swallow->speed = START_PLAYER_SPEED;
     swallow->color = color;
     swallow->animationFrame = 0;
-    swallow->hp = 3;
+    swallow->hp = config->max_swallow_health;
 
     return swallow;
 }
 
-Hunter** InitHunters(WIN* playWin, int color, Swallow* swallow)
+Hunter** InitHunters(WIN* playWin, int color, Swallow* swallow, CONFIG_FILE* config)
 {
-    Hunter** list = (Hunter**)malloc(MAX_HUNTERS_COUNT * sizeof(Hunter*));
-    for (int i = 0; i < MAX_HUNTERS_COUNT; i++)
+    Hunter** list = (Hunter**)malloc(config->max_hunters_count * sizeof(Hunter*));
+    for (int i = 0; i < config->max_hunters_count; i++)
     {
         Hunter* tempHunter = (Hunter*)malloc(sizeof(Hunter));
         tempHunter->playWin = playWin;
-        SpawnHunter(tempHunter, swallow);
+        SpawnHunter(tempHunter, swallow, config);
 
         tempHunter->color = color;
         list[i] = tempHunter;
@@ -696,19 +694,19 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
 
         if(ch == ESCAPE || *timer <= 0 || swallow->hp<= 0) break;
         else if(*timer <= 0) break;
-        else PlayerMovement(swallow, ch, stars, hunters);
+        else PlayerMovement(swallow, ch, stars, hunters, config);
 
         DrawSwallow(playWin, swallow);
 
-        for (int i = 0; i < MAX_STARS_COUNT; i++)
+        for (int i = 0; i < config->max_stars_count; i++)
         {
             DrawStars(playWin, stars[i], swallow);
         }
 
-        for (int i = 0; i < MAX_HUNTERS_COUNT; i++)
+        for (int i = 0; i < config->max_hunters_count; i++)
         {
             DrawHunter(playWin, hunters[i], swallow);
-            MoveHunter(hunters[i], swallow);
+            MoveHunter(hunters[i], swallow, config);
         }
 
         
@@ -771,12 +769,13 @@ int main()
             0,
             -1,
             START_PLAYER_SPEED,
-            SWALLOW_COLOR
+            SWALLOW_COLOR,
+            config
         );
 
-        Star** stars = InitStars(playWin, STAR_COLOR, STAR2_COLOR);
+        Star** stars = InitStars(playWin, STAR_COLOR, STAR2_COLOR, config);
         
-        Hunter** hunters = InitHunters(playWin, HUNTER_COLOR, swallow);
+        Hunter** hunters = InitHunters(playWin, HUNTER_COLOR, swallow, config);
         
         wrefresh(mainWin);
 
