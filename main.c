@@ -4,14 +4,13 @@
 #include <ncurses.h>                    // Text-based UI library
 #include <time.h>                       // Time needed to random the seed
 
-#define START_TIME 60                   // Time to survive in the game
 #define REFRESH_TIME 100                // Frequency of refreshing the screen
 #define START_PLAYER_SPEED 1            // Speed that player have on the start of a game
-#define MAX_STARS_COUNT 10              // Maximum amound of stars showed at the same time
-#define MAX_HUNTERS_COUNT 6             // Maximum amound of hunters in game
-#define MAX_STARS_SPEED 2               // Maximum speed that star can have
-#define MAX_HUNTERS_SPEED 2             // Maximum speed that hunter can have
-#define MAX_HUNTERS_BOUNDS 5            // Maximum amound of bounces that hunter can make
+#define MAX_STARS_COUNT 10              
+#define MAX_HUNTERS_COUNT 6             
+#define MAX_STARS_SPEED 2               
+#define MAX_HUNTERS_SPEED 2             
+#define MAX_HUNTERS_BOUNDS 5            
 
 #define ESCAPE      'q'                 // Button to quit the game
 #define REPEAT      'r'                 // Button to play again
@@ -34,6 +33,18 @@
 #define STAR_COLOR              9       // First stars color while shifting color
 #define STAR2_COLOR             10      // Second stars color while shifting color
 
+typedef struct {
+
+    float start_time;           // Time to survive in the game
+    int seed;                   // Number of seed to randomize the game
+    int max_stars_count;        // Maximum amound of stars showed at the same time
+    int max_stars_speed;        // Maximum speed that star can have
+    int max_hunters_count;      // Maximum amound of hunters in game
+    int max_hunters_speed;      // Maximum speed that hunter can have
+    int max_hunters_bounds;     // Maximum amound of bounces that hunter can make
+    int max_swallow_health;
+
+} CONFIG_FILE;
 
 typedef struct {
 	WINDOW* window;             // ncurses window pointer
@@ -98,6 +109,43 @@ void SpawnHunter(Hunter* tempHunter, Swallow* swallow)
     tempHunter->size = rand() % 3 + 1;
     tempHunter->animationFrame = 0;
     tempHunter->boundsCounter = rand() % MAX_HUNTERS_BOUNDS + 1;
+}
+
+CONFIG_FILE* getConfigInfo(char* adress)
+{
+    FILE* ofile;
+    CONFIG_FILE* cfile = (CONFIG_FILE*)malloc(sizeof(CONFIG_FILE));
+    char output[100];
+
+    ofile = fopen(adress, "r");
+    if (!ofile)
+    {
+        printf("The .conf file can't be found. Please add configuration file to play a game.");
+        return cfile;
+    }
+
+    fscanf(
+        ofile, 
+        "start time = %f\n"
+        "seed = %i\n"
+        "max stars count = %d\n"
+        "max stars speed = %d\n"
+        "max hunters count = %d\n"
+        "max hunters speed = %d\n"
+        "max hunters bounds = %d\n"
+        "max swallow health = %d", 
+        &cfile->start_time, 
+        &cfile->seed, 
+        &cfile->max_stars_count, 
+        &cfile->max_stars_speed, 
+        &cfile->max_hunters_count, 
+        &cfile->max_hunters_speed, 
+        &cfile->max_hunters_bounds, 
+        &cfile->max_swallow_health);
+    fclose(ofile);
+
+    return cfile;
+
 }
 
 void CheckStarsCollision(Swallow* swallow, Star* star)
@@ -632,11 +680,11 @@ void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying)
     }
 }
 
-void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** stars, Hunter** hunters)
+void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters)
 {
     int ch;
     float *timer = (float*)malloc(sizeof(float));
-    *timer = (float)START_TIME;
+    *timer = config->start_time;
     while(1)
     {
         ch = wgetch(playWin->window);
@@ -677,7 +725,8 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin, Swallow* swallow, Star** 
 
 int main()
 {
-    srand(42);
+    CONFIG_FILE* config = getConfigInfo(".conf");
+    srand(config->seed);
     bool* isPlaying = (bool*)malloc(sizeof(bool));
     *isPlaying = true;
     while (*isPlaying)
@@ -731,7 +780,7 @@ int main()
         
         wrefresh(mainWin);
 
-        Update(playWin, statusWin, lifeWin, swallow, stars, hunters);
+        Update(playWin, statusWin, lifeWin, config, swallow, stars, hunters);
 
         PlayAgain(playWin, swallow, isPlaying);
 
