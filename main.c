@@ -409,7 +409,7 @@ void DrawHunter(WIN* playWin, Hunter* hunter, Swallow* swallow)
 
 void DrawStars(WIN* playWin, Star* star, Swallow* swallow)
 {
-    if(star->animationFrame == 1)
+    if(star->animationFrame % 3)
 	    wattron(playWin->window, COLOR_PAIR(star->color));
     else
         wattron(playWin->window, COLOR_PAIR(star->color2));
@@ -500,8 +500,7 @@ Star** InitStars(WIN* playWin, int color, int color2, CONFIG_FILE* config)
 
 Swallow* InitSwallow(WIN* playWin, int x, int y, int dx, int dy, int speed, int color, CONFIG_FILE* config)
 {
-    //Allocating memory for Swallow
-    Swallow* swallow = (Swallow*)malloc(sizeof(Swallow));
+    Swallow* swallow = (Swallow*)malloc(sizeof(Swallow)); //Allocating memory for Swallow
 
     //Seting swallow's properties
     swallow->playWin = playWin;
@@ -790,6 +789,10 @@ int main()
 
         // Free allocated memory
         free(swallow);
+        for (int i = 0; i < config->max_stars_count; i++)
+            free(stars[i]);
+        for (int i = 0; i < config->max_hunters_count; i++)
+            free(hunters[i]);
         free(stars);
         free(hunters);
         free(playWin);
