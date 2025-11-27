@@ -82,7 +82,7 @@ typedef struct {
 	int animationFrame;		    // Color scheme
 } Star;
 
-void SpawnHunter(Hunter* tempHunter, Swallow* swallow, CONFIG_FILE* config)
+void SpawnHunter(Hunter* tempHunter, Swallow* swallow, CONFIG_FILE* config, float* timer)
 {
     tempHunter->speed = rand() % config->max_hunters_speed + 1;
 
@@ -104,7 +104,10 @@ void SpawnHunter(Hunter* tempHunter, Swallow* swallow, CONFIG_FILE* config)
 
     tempHunter->size = rand() % config->max_hunters_size + 1;
     tempHunter->animationFrame = 0;
-    tempHunter->boundsCounter = rand() % config->max_hunters_bounds + 1;
+    if (*timer == 0)
+        tempHunter->boundsCounter = 0;
+    else
+        tempHunter->boundsCounter = (int)(config->max_hunters_bounds *  (config->start_time - *timer) / config->start_time + 1);
 }
 
 CONFIG_FILE* getConfigInfo(char* adress)
@@ -159,7 +162,7 @@ void CheckStarsCollision(Swallow* swallow, Star* star)
     }
 }
 
-void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config)
+void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config, float* timer)
 {
     float dx = hunter->x-swallow->x;
     float dy = hunter->y-swallow->y;
@@ -167,13 +170,13 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config
     float distance =dx*dx+dy*dy;
     if(distance <= (minimum_distance * minimum_distance))
     {
-        SpawnHunter(hunter, swallow, config);
+        SpawnHunter(hunter, swallow, config, timer);
 
         swallow->hp -=1;
     }
 }
 
-void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CONFIG_FILE* config)
+void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CONFIG_FILE* config, float* timer)
 {
     for (int i = 0; i < config->max_stars_count; i++)
     {
@@ -182,12 +185,14 @@ void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CO
     
     for (int i = 0; i < config->max_hunters_count; i++)
     {
-        CheckHuntersCollision(swallow, hunters[i], config);
+        if (*timer  >= i * config->start_time / config->max_hunters_count)
+            continue;
+        CheckHuntersCollision(swallow, hunters[i], config, timer);
     }
     
 }
 
-void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters, CONFIG_FILE* config)
+void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters, CONFIG_FILE* config, float* timer)
 {
     switch (input)
     {
@@ -238,7 +243,7 @@ void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters,
         else
             swallow->x = COLS;
         
-        CheckSwallowsCollision(swallow, stars, hunters, config);
+        CheckSwallowsCollision(swallow, stars, hunters, config, timer);
     }
     
 
@@ -296,8 +301,11 @@ void DrawSwallow(WIN* playWin, Swallow* swallow)
     swallow->animationFrame +=1;
 }
 
-void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config)
+void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config, float* timer)
 {
+    if (hunter->boundsCounter <= 0)
+        SpawnHunter(hunter, swallow, config, timer);
+
     for (int i = 0; i < hunter->speed; i++)
     {
         hunter->x += hunter->dx;
@@ -317,14 +325,14 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config)
             hunter->y = 0;
             hunter->a *= -1;
             hunter->b = hunter->y - (hunter->a * hunter->x);
-            hunter->boundsCounter--;
+            hunter->boundsCounter-=1;
         }
         else if (hunter->y > ROWS - 2)
         {
             hunter->y = ROWS - 2;
             hunter->a *= -1;
             hunter->b = hunter->y - (hunter->a * hunter->x);
-            hunter->boundsCounter--;
+            hunter->boundsCounter-=1;
         }
 
 
@@ -334,7 +342,7 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config)
             hunter->a *= -1;
             hunter->b = hunter->y - (hunter->a * hunter->x);
             hunter->dx *= -1;
-            hunter->boundsCounter--;
+            hunter->boundsCounter-=1;
         }
         else if (hunter->x > COLS - 2)
         {
@@ -342,13 +350,10 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config)
             hunter->a *= -1;
             hunter->b = hunter->y - (hunter->a * hunter->x);
             hunter->dx *= -1;
-            hunter->boundsCounter--;
+            hunter->boundsCounter-=1;
         }
 
-        if (hunter->boundsCounter <= 0)
-            SpawnHunter(hunter, swallow, config);
-
-        CheckHuntersCollision(swallow, hunter, config);
+        CheckHuntersCollision(swallow, hunter, config, timer);
     }
 }
 
@@ -520,11 +525,13 @@ Swallow* InitSwallow(WIN* playWin, int x, int y, int dx, int dy, int speed, int 
 Hunter** InitHunters(WIN* playWin, int color, Swallow* swallow, CONFIG_FILE* config)
 {
     Hunter** list = (Hunter**)malloc(config->max_hunters_count * sizeof(Hunter*));
+    float* timer;
+    *timer = 0;
     for (int i = 0; i < config->max_hunters_count; i++)
     {
         Hunter* tempHunter = (Hunter*)malloc(sizeof(Hunter));
         tempHunter->playWin = playWin;
-        SpawnHunter(tempHunter, swallow, config);
+        SpawnHunter(tempHunter, swallow, config, timer);
 
         tempHunter->color = color;
         list[i] = tempHunter;
@@ -693,7 +700,7 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
 
         if(ch == ESCAPE || *timer <= 0 || swallow->hp<= 0) break;
         else if(*timer <= 0) break;
-        else PlayerMovement(swallow, ch, stars, hunters, config);
+        else PlayerMovement(swallow, ch, stars, hunters, config, timer);
 
         DrawSwallow(playWin, swallow);
 
@@ -704,8 +711,10 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
 
         for (int i = 0; i < config->max_hunters_count; i++)
         {
+            if (*timer >= i * config->start_time / config->max_hunters_count)
+                continue;
+            MoveHunter(hunters[i], swallow, config, timer);
             DrawHunter(playWin, hunters[i], swallow);
-            MoveHunter(hunters[i], swallow, config);
         }
 
         
