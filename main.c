@@ -9,6 +9,9 @@
 
 #define ESCAPE      'q'                 // Button to quit the game
 #define REPEAT      'r'                 // Button to play again
+#define SAFE_ZONE   ' '                 // Button to call the safe zone
+
+#define ZONE_TIME   2                   //Time of zone being alive for albatros rescuing
 
 #define BORDER		1		            // Border width (in characters)
 #define ROWS		40		            // Play window height (rows)
@@ -27,6 +30,7 @@
 #define END_COLOR               8       // Color of End Screen
 #define STAR_COLOR              9       // First stars color while shifting color
 #define STAR2_COLOR             10      // Second stars color while shifting color
+#define SAFE_ZONE_COLOR         11      // Safe zone color
 
 typedef struct {
 
@@ -81,6 +85,14 @@ typedef struct {
 	int color2;		            // Color scheme while shifting
 	int animationFrame;		    // Color scheme
 } Star;
+
+typedef struct {
+    WIN* playWin;               // Play Window where SafeZone is shown
+    int x, y;		            // Position on screen
+    int range;		            // Range of the safe zone circle
+    float activeTime;		    // Time of zone being active
+    int color;                  // Color of the safe zone
+} SafeZone;
 
 void SpawnHunter(Hunter* tempHunter, Swallow* swallow, CONFIG_FILE* config, float* timer)
 {
@@ -174,6 +186,14 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config
 
         swallow->hp -=1;
     }
+
+    // for spawn zone
+    dx = hunter->x - COLS/2;
+    dy = hunter->y - ROWS/2;
+    distance = dx * dx + dy * dy;
+    if (distance <= 4*swallow->hp* swallow->hp)
+        SpawnHunter(hunter, swallow, config, timer);
+
 }
 
 void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CONFIG_FILE* config, float* timer)
@@ -192,7 +212,17 @@ void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CO
     
 }
 
-void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters, CONFIG_FILE* config, float* timer)
+void SetSafeZone(SafeZone* zone, Swallow* swallow, float activeTime)
+{
+    zone->playWin = swallow->playWin;
+    zone->range = swallow->hp;
+    zone->x = COLS/2;
+    zone->y = ROWS/2;
+    zone->activeTime = activeTime;
+    zone->color = SAFE_ZONE_COLOR;
+}
+
+void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters, CONFIG_FILE* config, float* timer, SafeZone* safeZone)
 {
     switch (input)
     {
@@ -225,6 +255,10 @@ void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters,
         if(swallow->speed < 5)
             swallow->speed = swallow->speed +1;
         break;
+
+    case ' ':
+        SetSafeZone(safeZone, swallow, 2.0);
+        break;
     
     default:
         break;
@@ -245,9 +279,6 @@ void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters,
         
         CheckSwallowsCollision(swallow, stars, hunters, config, timer);
     }
-    
-
-    
 }
 
 void DrawSwallow(WIN* playWin, Swallow* swallow)
@@ -564,6 +595,7 @@ WINDOW* Start()
     init_pair(AGAIN_COLOR, COLOR_MAGENTA, COLOR_BLACK);
     init_pair(STAR_COLOR, COLOR_YELLOW, COLOR_BLACK);
     init_pair(STAR2_COLOR, COLOR_WHITE, COLOR_BLACK);
+    init_pair(SAFE_ZONE_COLOR, COLOR_YELLOW, COLOR_YELLOW);
 
     //makes input invisible
     noecho();
@@ -585,7 +617,7 @@ void UpdateStatus(WIN* statusWin, Swallow* swallow)
 
     char info[50];
     snprintf(info, sizeof(info), "Number of gained stars: %d    Swallows speed: %d", swallow->wallet, swallow->speed);
-    char controls[] = "W (up), S (down), D (right), A (left) | O (slow down), P (go faster)";
+    char controls[] = "W (up), S (down), D (right), A (left) | O (slow down), P (go faster), SPACE (safe zone)";
 
     // Display status info
 	mvwprintw(statusWin->window, 1, (COLS-(sizeof(info)/sizeof(char)))/2, info);
@@ -618,6 +650,24 @@ void UpdateLifeInfo(WIN* lifeinfo, Swallow* swallow, float *timer)
 
 	// Update display
 	wrefresh(lifeinfo->window);
+}
+
+void UpdateSafeZone(SafeZone* safeZone, Star** stars, Hunter** hunters)
+{
+    safeZone->activeTime -= 0.1;
+
+    wattron(safeZone->playWin->window, COLOR_PAIR(safeZone->color));
+    for (int x = COLS / 2 - 2 * safeZone->range; x <= COLS / 2 + 2 * safeZone->range; x++)
+    {
+        for (int y = ROWS / 2 - safeZone->range; y <= ROWS / 2 + safeZone->range; y++)
+        {
+            float dx = (x - safeZone->x);
+            float dy = (y - safeZone->y);
+
+            if(0.25*dx*dx + dy*dy <= 4*safeZone->range *safeZone->range)
+                mvwprintw(safeZone->playWin->window, y, x, " ");
+        }
+    }
 }
 
 void EndScreen(WIN* playWin)
@@ -684,7 +734,7 @@ void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying)
     }
 }
 
-void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters)
+void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters, SafeZone* safeZone)
 {
     int ch;
     float *timer = (float*)malloc(sizeof(float));
@@ -697,10 +747,12 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
 
         *timer -= 0.1;
         UpdateLifeInfo(lifeWin, swallow, timer);
+        if (safeZone->activeTime > 0)
+            UpdateSafeZone(safeZone, stars, hunters);
 
         if(ch == ESCAPE || *timer <= 0 || swallow->hp<= 0) break;
         else if(*timer <= 0) break;
-        else PlayerMovement(swallow, ch, stars, hunters, config, timer);
+        else PlayerMovement(swallow, ch, stars, hunters, config, timer, safeZone);
 
         DrawSwallow(playWin, swallow);
 
@@ -716,7 +768,6 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
             MoveHunter(hunters[i], swallow, config, timer);
             DrawHunter(playWin, hunters[i], swallow);
         }
-
         
 
         wrefresh(playWin->window);
@@ -784,10 +835,13 @@ int main()
         Star** stars = InitStars(playWin, STAR_COLOR, STAR2_COLOR, config);
         
         Hunter** hunters = InitHunters(playWin, HUNTER_COLOR, swallow, config);
+
+        SafeZone* safeZone = (SafeZone*)malloc(sizeof(SafeZone));
+        SetSafeZone(safeZone, swallow, 0.0);
         
         wrefresh(mainWin);
 
-        Update(playWin, statusWin, lifeWin, config, swallow, stars, hunters);
+        Update(playWin, statusWin, lifeWin, config, swallow, stars, hunters, safeZone);
 
         PlayAgain(playWin, swallow, isPlaying);
 
