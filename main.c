@@ -174,7 +174,7 @@ void CheckStarsCollision(Swallow* swallow, Star* star)
     }
 }
 
-void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config, float* timer)
+void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config, SafeZone* safeZone, float* timer)
 {
     float dx = hunter->x-swallow->x;
     float dy = hunter->y-swallow->y;
@@ -188,15 +188,19 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config
     }
 
     // for spawn zone
-    dx = hunter->x - COLS/2;
-    dy = hunter->y - ROWS/2;
-    distance = dx * dx + dy * dy;
-    if (distance <= 4*swallow->hp* swallow->hp)
-        SpawnHunter(hunter, swallow, config, timer);
+    if(safeZone->activeTime > 0)
+    {
+        dx = hunter->x - COLS / 2;
+        dy = hunter->y - ROWS / 2;
+        distance = dx * dx + dy * dy;
+        if (distance <= 4 * swallow->hp * swallow->hp)
+            SpawnHunter(hunter, swallow, config, timer);
+    }
+    
 
 }
 
-void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CONFIG_FILE* config, float* timer)
+void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CONFIG_FILE* config, SafeZone* safeZone, float* timer)
 {
     for (int i = 0; i < config->max_stars_count; i++)
     {
@@ -207,7 +211,7 @@ void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CO
     {
         if (*timer  >= i * config->start_time / config->max_hunters_count)
             continue;
-        CheckHuntersCollision(swallow, hunters[i], config, timer);
+        CheckHuntersCollision(swallow, hunters[i], config, safeZone, timer);
     }
     
 }
@@ -277,7 +281,7 @@ void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters,
         else
             swallow->x = COLS;
         
-        CheckSwallowsCollision(swallow, stars, hunters, config, timer);
+        CheckSwallowsCollision(swallow, stars, hunters, config, safeZone, timer);
     }
 }
 
@@ -332,7 +336,7 @@ void DrawSwallow(WIN* playWin, Swallow* swallow)
     swallow->animationFrame +=1;
 }
 
-void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config, float* timer)
+void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* safeZone, float* timer)
 {
     if (hunter->boundsCounter <= 0)
         SpawnHunter(hunter, swallow, config, timer);
@@ -384,7 +388,7 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config, float* ti
             hunter->boundsCounter-=1;
         }
 
-        CheckHuntersCollision(swallow, hunter, config, timer);
+        CheckHuntersCollision(swallow, hunter, config, safeZone, timer);
     }
 }
 
@@ -466,6 +470,33 @@ void DrawStars(WIN* playWin, Star* star, Swallow* swallow)
         {
             star->y %= ROWS-1;
             star->x = rand()%(COLS-1) +1;
+        }
+    }
+}
+
+void DrawSafeZone(SafeZone* safeZone, Star** stars, Hunter** hunters, Swallow* swallow)
+{
+    safeZone->activeTime -= 0.1;
+
+    wattron(safeZone->playWin->window, COLOR_PAIR(safeZone->color));
+    for (int x = COLS / 2 - 2 * safeZone->range; x <= COLS / 2 + 2 * safeZone->range; x++)
+    {
+        for (int y = ROWS / 2 - safeZone->range; y <= ROWS / 2 + safeZone->range; y++)
+        {
+            float dx = (x - safeZone->x);
+            float dy = (y - safeZone->y);
+
+            if (0.25 * dx * dx + dy * dy <= 4 * safeZone->range * safeZone->range)
+            {
+                dx = x - swallow->x;
+                dy = y - swallow->y;
+
+                float distance = dx * dx + dy * dy;
+                if (distance > swallow->hp * swallow->hp * 2)
+                {
+                    mvwprintw(safeZone->playWin->window, y, x, " ");
+                }
+            }
         }
     }
 }
@@ -652,24 +683,6 @@ void UpdateLifeInfo(WIN* lifeinfo, Swallow* swallow, float *timer)
 	wrefresh(lifeinfo->window);
 }
 
-void UpdateSafeZone(SafeZone* safeZone, Star** stars, Hunter** hunters)
-{
-    safeZone->activeTime -= 0.1;
-
-    wattron(safeZone->playWin->window, COLOR_PAIR(safeZone->color));
-    for (int x = COLS / 2 - 2 * safeZone->range; x <= COLS / 2 + 2 * safeZone->range; x++)
-    {
-        for (int y = ROWS / 2 - safeZone->range; y <= ROWS / 2 + safeZone->range; y++)
-        {
-            float dx = (x - safeZone->x);
-            float dy = (y - safeZone->y);
-
-            if(0.25*dx*dx + dy*dy <= 4*safeZone->range *safeZone->range)
-                mvwprintw(safeZone->playWin->window, y, x, " ");
-        }
-    }
-}
-
 void EndScreen(WIN* playWin)
 {
     CleanWin(playWin, BORDER);
@@ -748,7 +761,7 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
         *timer -= 0.1;
         UpdateLifeInfo(lifeWin, swallow, timer);
         if (safeZone->activeTime > 0)
-            UpdateSafeZone(safeZone, stars, hunters);
+            DrawSafeZone(safeZone, stars, hunters, swallow);
 
         if(ch == ESCAPE || *timer <= 0 || swallow->hp<= 0) break;
         else if(*timer <= 0) break;
@@ -765,7 +778,7 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
         {
             if (*timer >= i * config->start_time / config->max_hunters_count)
                 continue;
-            MoveHunter(hunters[i], swallow, config, timer);
+            MoveHunter(hunters[i], swallow, config, safeZone, timer);
             DrawHunter(playWin, hunters[i], swallow);
         }
         
