@@ -4,12 +4,15 @@
 #include <ncurses.h>                    // Text-based UI library
 #include <time.h>                       // Time needed to random the seed
 
+#include <math.h>                       // Helps with the mathematic problems that couldn't be solved without it
+
 #define REFRESH_TIME 100                // Frequency of refreshing the screen
 #define START_PLAYER_SPEED 1            // Speed that player have on the start of a game     
 
 #define ESCAPE      'q'                 // Button to quit the game
 #define REPEAT      'r'                 // Button to play again
 #define SAFE_ZONE   ' '                 // Button to call the safe zone
+#define ALBATROS_SPEED   2              // Speed of the albatros taxi
 
 #define ZONE_TIME   2                   //Time of zone being alive for albatros rescuing
 
@@ -31,6 +34,7 @@
 #define STAR_COLOR              9       // First stars color while shifting color
 #define STAR2_COLOR             10      // Second stars color while shifting color
 #define SAFE_ZONE_COLOR         11      // Safe zone color
+#define TAXI_COLOR              12      // Color of a friendly albatros taxi
 
 typedef struct {
 
@@ -72,7 +76,7 @@ typedef struct {
     int dx;                     // direction to move the swallow
     float a, b;                 // Values of func to move huntery=ax+b
     int speed;                  // Hunters speed
-	int animationFrame;		    // Color scheme
+	int animationFrame;		    // Animation frame of hunter
     int boundsCounter;		    // Value of possible bounds
     short int onTheScreen;		// Says if the hunter already jumped on the screen (0-1)
 } Hunter;
@@ -90,9 +94,19 @@ typedef struct {
     WIN* playWin;               // Play Window where SafeZone is shown
     int x, y;		            // Position on screen
     int range;		            // Range of the safe zone circle
-    float activeTime;		    // Time of zone being active
+    bool active;		    // Time of zone being active
     int color;                  // Color of the safe zone
 } SafeZone;
+
+typedef struct {
+    WIN* playWin;               // Play Window where hunter is shown
+    float x, y;		            // Position on screen
+    int speed;		            // Speed of the albatros
+    int color;		            // Color scheme
+    int stage;                  // Stage of rescuing the swallow
+    int animationFrame;		    // Animation frame of taxi
+
+} TAXI;
 
 void SpawnHunter(Hunter* tempHunter, Swallow* swallow, CONFIG_FILE* config, float* timer)
 {
@@ -188,12 +202,12 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config
     }
 
     // for spawn zone
-    if(safeZone->activeTime > 0)
+    if(safeZone->active)
     {
         dx = hunter->x - COLS / 2;
         dy = hunter->y - ROWS / 2;
         distance = dx * dx + dy * dy;
-        if (distance <= 4 * swallow->hp * swallow->hp)
+        if (distance <= 4 * safeZone->range * safeZone->range)
             SpawnHunter(hunter, swallow, config, timer);
     }
     
@@ -202,6 +216,9 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config
 
 void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CONFIG_FILE* config, SafeZone* safeZone, float* timer)
 {
+    if (safeZone->active)
+        return;
+
     for (int i = 0; i < config->max_stars_count; i++)
     {
         CheckStarsCollision(swallow, stars[i]);
@@ -216,17 +233,29 @@ void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CO
     
 }
 
-void SetSafeZone(SafeZone* zone, Swallow* swallow, float activeTime)
+void SetSafeZone(SafeZone* zone, Swallow* swallow, bool active)
 {
     zone->playWin = swallow->playWin;
     zone->range = swallow->hp;
-    zone->x = COLS/2;
-    zone->y = ROWS/2;
-    zone->activeTime = activeTime;
+    zone->x = COLS / 2;
+    zone->y = ROWS / 2;
+    zone->active = active;
     zone->color = SAFE_ZONE_COLOR;
 }
 
-void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters, CONFIG_FILE* config, float* timer, SafeZone* safeZone)
+void SetTaxi(TAXI* taxi, Swallow* swallow)
+{
+    taxi->playWin = swallow->playWin;
+    taxi->x = COLS/2;
+    taxi->y = 1;
+    taxi->speed = ALBATROS_SPEED;
+
+    taxi->color = TAXI_COLOR;
+    taxi->stage = 4;
+    taxi->animationFrame = 0;
+}
+
+void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters, CONFIG_FILE* config, float* timer, SafeZone* safeZone, TAXI* taxi)
 {
     switch (input)
     {
@@ -261,7 +290,11 @@ void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters,
         break;
 
     case ' ':
-        SetSafeZone(safeZone, swallow, 2.0);
+        if (taxi->stage > 3)
+        {
+            SetTaxi(taxi, swallow);
+            taxi->stage = 0;
+        }
         break;
     
     default:
@@ -387,8 +420,8 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
             hunter->dx *= -1;
             hunter->boundsCounter-=1;
         }
-
-        CheckHuntersCollision(swallow, hunter, config, safeZone, timer);
+        if(!safeZone->active)
+            CheckHuntersCollision(swallow, hunter, config, safeZone, timer);
     }
 }
 
@@ -474,10 +507,54 @@ void DrawStars(WIN* playWin, Star* star, Swallow* swallow)
     }
 }
 
-void DrawSafeZone(SafeZone* safeZone, Star** stars, Hunter** hunters, Swallow* swallow)
+void MoveTaxi(TAXI* taxi, Swallow* swallow, SafeZone* safeZone)
 {
-    safeZone->activeTime -= 0.1;
+    if (taxi->stage > 2)
+    {
+        safeZone->active = false;
+        return;
+    }
 
+    float x, y;
+    if (taxi->stage == 0)
+    {
+        x = swallow->x;
+        y = swallow->y;
+    }
+    else if(taxi->stage == 1)
+    {
+        SetSafeZone(safeZone, swallow, true);
+        x = COLS/2;
+        y = ROWS/2;
+    }
+    else
+    {
+        x = COLS / 2;
+        y = -1;
+    }
+
+    float dx = x - taxi->x;
+    float dy = y - taxi->y;
+
+    float distance = sqrt(dx * dx + dy * dy);
+
+    if (distance <= swallow->hp)
+        taxi->stage += 1;
+
+    if (distance != 0) {
+        dx /= distance;
+        dy /= distance;
+    }
+
+    taxi->x += dx * taxi->speed;
+    taxi->y += dy * taxi->speed;
+
+    wattron(taxi->playWin->window, COLOR_PAIR(taxi->color));
+    mvwprintw(taxi->playWin->window, (int)taxi->y, (int)taxi->x, " ");
+}
+
+void DrawSafeZone(SafeZone* safeZone, Swallow* swallow)
+{
     wattron(safeZone->playWin->window, COLOR_PAIR(safeZone->color));
     for (int x = COLS / 2 - 2 * safeZone->range; x <= COLS / 2 + 2 * safeZone->range; x++)
     {
@@ -556,7 +633,7 @@ Star** InitStars(WIN* playWin, int color, int color2, CONFIG_FILE* config)
         tempStar->y = -rand()%ROWS;
         tempStar->fallingSpeed = rand()%config->max_stars_speed+1;
         tempStar->color = color;
-        tempStar->color = color2;
+        tempStar->color2 = color2;
         tempStar->animationFrame = 0;
         list[i] = tempStar;
     }
@@ -627,6 +704,7 @@ WINDOW* Start()
     init_pair(STAR_COLOR, COLOR_YELLOW, COLOR_BLACK);
     init_pair(STAR2_COLOR, COLOR_WHITE, COLOR_BLACK);
     init_pair(SAFE_ZONE_COLOR, COLOR_YELLOW, COLOR_YELLOW);
+    init_pair(TAXI_COLOR, COLOR_WHITE, COLOR_WHITE);
 
     //makes input invisible
     noecho();
@@ -747,7 +825,7 @@ void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying)
     }
 }
 
-void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters, SafeZone* safeZone)
+void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters, SafeZone* safeZone, TAXI* taxi)
 {
     int ch;
     float *timer = (float*)malloc(sizeof(float));
@@ -760,14 +838,28 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
 
         *timer -= 0.1;
         UpdateLifeInfo(lifeWin, swallow, timer);
-        if (safeZone->activeTime > 0)
-            DrawSafeZone(safeZone, stars, hunters, swallow);
+        if (ch == ESCAPE || *timer <= 0 || swallow->hp <= 0) break;
+        else if (*timer <= 0) break;
+        else PlayerMovement(swallow, ch, stars, hunters, config, timer, safeZone, taxi);
 
-        if(ch == ESCAPE || *timer <= 0 || swallow->hp<= 0) break;
-        else if(*timer <= 0) break;
-        else PlayerMovement(swallow, ch, stars, hunters, config, timer, safeZone);
+        if (taxi->stage >= 0 && taxi->stage <= 3)
+        {
+            if (taxi->stage == 1)
+            {
+                swallow->x = taxi->x;
+                swallow->y = taxi->y;
+            }
+            else
+                DrawSwallow(playWin, swallow);
 
-        DrawSwallow(playWin, swallow);
+            MoveTaxi(taxi, swallow, safeZone);
+
+            if(safeZone->active)
+                DrawSafeZone(safeZone, swallow);
+        }
+        else
+            DrawSwallow(playWin, swallow);
+
 
         for (int i = 0; i < config->max_stars_count; i++)
         {
@@ -850,11 +942,14 @@ int main()
         Hunter** hunters = InitHunters(playWin, HUNTER_COLOR, swallow, config);
 
         SafeZone* safeZone = (SafeZone*)malloc(sizeof(SafeZone));
-        SetSafeZone(safeZone, swallow, 0.0);
+        TAXI* taxi = (TAXI*)malloc(sizeof(TAXI));
+
+        SetSafeZone(safeZone, swallow, false);
+        SetTaxi(taxi, swallow);
         
         wrefresh(mainWin);
 
-        Update(playWin, statusWin, lifeWin, config, swallow, stars, hunters, safeZone);
+        Update(playWin, statusWin, lifeWin, config, swallow, stars, hunters, safeZone, taxi);
 
         PlayAgain(playWin, swallow, isPlaying);
 
@@ -874,6 +969,8 @@ int main()
         free(playWin);
         free(statusWin);
         free(lifeWin);
+        free(safeZone);
+        free(taxi);
     }
 
     return 0;
