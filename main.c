@@ -101,6 +101,7 @@ typedef struct {
 typedef struct {
     WIN* playWin;               // Play Window where hunter is shown
     float x, y;		            // Position on screen
+    float dx, dy;		        // Vectors of moving taxi
     int speed;		            // Speed of the albatros
     int color;		            // Color scheme
     int stage;                  // Stage of rescuing the swallow
@@ -249,6 +250,8 @@ void SetTaxi(TAXI* taxi, Swallow* swallow)
     taxi->x = COLS/2;
     taxi->y = 1;
     taxi->speed = ALBATROS_SPEED;
+    taxi->dx = 0;
+    taxi->dy = 0;
 
     taxi->color = ALBATROS_TAXI_COLOR;
     taxi->stage = 4;
@@ -535,7 +538,30 @@ void DrawSafeZone(SafeZone* safeZone, Swallow* swallow)
 void DrawTaxi(TAXI* taxi)
 {
     wattron(taxi->playWin->window, COLOR_PAIR(taxi->color));
+
     mvwprintw(taxi->playWin->window, (int)taxi->y, (int)taxi->x, " ");
+    mvwprintw(taxi->playWin->window, (int)taxi->y, (int)taxi->x + 1, " ");
+    mvwprintw(taxi->playWin->window, (int)taxi->y, (int)taxi->x - 1, " ");
+    mvwprintw(taxi->playWin->window, (int)taxi->y, (int)taxi->x + 2, " ");
+    mvwprintw(taxi->playWin->window, (int)taxi->y, (int)taxi->x - 2, " ");
+
+    if (taxi->dx > 0)
+    {
+        mvwprintw(taxi->playWin->window, (int)taxi->y - 1, (int)taxi->x, ">");
+        mvwprintw(taxi->playWin->window, (int)taxi->y, (int)taxi->x + 3, " ");
+    }
+    else
+    {
+        mvwprintw(taxi->playWin->window, (int)taxi->y - 1, (int)taxi->x, "<");
+        mvwprintw(taxi->playWin->window, (int)taxi->y, (int)taxi->x - 3, " ");
+
+    }
+
+    wattron(taxi->playWin->window, COLOR_PAIR(MAIN_COLOR));
+    mvwprintw(taxi->playWin->window, (int)taxi->y+1, (int)taxi->x + 2, "O");
+    mvwprintw(taxi->playWin->window, (int)taxi->y+1, (int)taxi->x - 2, "O");
+
+
 }
 
 void MoveTaxi(TAXI* taxi, Swallow* swallow, SafeZone* safeZone)
@@ -564,21 +590,21 @@ void MoveTaxi(TAXI* taxi, Swallow* swallow, SafeZone* safeZone)
         y = -1;
     }
 
-    float dx = x - taxi->x;
-    float dy = y - taxi->y;
+    taxi->dx = x - taxi->x;
+    taxi->dy = y - taxi->y;
 
-    float distance = sqrt(dx * dx + dy * dy);
+    float distance = sqrt(taxi->dx * taxi->dx + taxi->dy * taxi->dy);
 
     if (distance <= swallow->hp)
         taxi->stage += 1;
 
     if (distance != 0) {
-        dx /= distance;
-        dy /= distance;
+        taxi->dx /= distance;
+        taxi->dy /= distance;
     }
 
-    taxi->x += dx * taxi->speed;
-    taxi->y += dy * taxi->speed;
+    taxi->x += taxi->dx * taxi->speed;
+    taxi->y += taxi->dy * taxi->speed;
 
     DrawTaxi(taxi);
 }
@@ -703,7 +729,7 @@ WINDOW* Start()
 	init_pair(PLAY_COLOR, COLOR_CYAN, COLOR_BLACK);
 	init_pair(SWALLOW_COLOR, COLOR_GREEN, COLOR_BLACK);
     init_pair(HUNTER_COLOR, COLOR_RED, COLOR_BLACK);
-    init_pair(ALBATROS_TAXI_COLOR, COLOR_YELLOW, COLOR_YELLOW);
+    init_pair(ALBATROS_TAXI_COLOR, COLOR_WHITE, COLOR_YELLOW);
     init_pair(END_COLOR, COLOR_RED, COLOR_BLACK);
     init_pair(AGAIN_COLOR, COLOR_MAGENTA, COLOR_BLACK);
     init_pair(STAR_COLOR, COLOR_YELLOW, COLOR_BLACK);
