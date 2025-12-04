@@ -136,10 +136,21 @@ void UpdateBoss(Boss* boss, Swallow* swallow)
     boss->b = swallow->y - (boss->a * swallow->x);
 }
 
-void DrawBoss(Boss* boss)
+void DrawBoss(Boss* boss, int size)
 {
     wattron(boss->playWin->window, COLOR_PAIR(boss->color));
-    mvwprintw(boss->playWin->window, boss->y, boss->x, " ");
+    for (int x = boss->x - 2 * size; x <= boss->x + 2 * size; x++)
+    {
+        for (int y = boss->y - size; y <= boss->y + size; y++)
+        {
+            float dx = (x - boss->x);
+            float dy = (y - boss->y);
+            if (0.25 * dx * dx + dy * dy <= 4 * size * size)
+            {
+                mvwprintw(boss->playWin->window, y, x, " ");
+            }
+        }
+    }
 }
 
 void SpawnBoss(Boss* boss, CONFIG_FILE* config, Swallow* swallow)
@@ -182,7 +193,7 @@ void MoveBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config, SafeZone* safeZ
 {
     if (*timer < boss->enterTime)
         return;
-    DrawBoss(boss);
+    DrawBoss(boss, config->max_swallow_health/2);
 
     for (int i = 0; i < boss->speed; i++)
     {
