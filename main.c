@@ -8,13 +8,13 @@
 
 #define REFRESH_TIME 100                // Frequency of refreshing the screen
 #define START_PLAYER_SPEED 1            // Speed that player have on the start of a game     
+#define BOSS_ENTER_PART 1               // The part of the game in which Boss enters the game (2 -> 1/2, 4 -> 1/4 etz)     
+#define MAX_BOSS_SPEED 5                // Speed of Boss at maximum
 
 #define ESCAPE      'q'                 // Button to quit the game
 #define REPEAT      'r'                 // Button to play again
 #define SAFE_ZONE   ' '                 // Button to call the safe zone
 #define ALBATROS_SPEED   2              // Speed of the albatros taxi
-
-#define ZONE_TIME   2                   //Time of zone being alive for albatros rescuing
 
 #define BORDER		1		            // Border width (in characters)
 #define ROWS		40		            // Play window height (rows)
@@ -35,6 +35,7 @@
 #define STAR2_COLOR             10      // Second stars color while shifting color
 #define SAFE_ZONE_COLOR         11      // Safe zone color
 #define TAXI_COLOR              12      // Color of a friendly albatros taxi
+#define BOSS_COLOR              13      // Color of a Boss
 
 typedef struct {
 
@@ -73,7 +74,7 @@ typedef struct {
 	int x, y;		            // Position on screen
     int size;                   // Size of Hunter (1-3)
 	int color;		            // Color scheme
-    int dx;                     // direction to move the swallow
+    int dx;                     // direction to move the hunter
     float a, b;                 // Values of func to move huntery=ax+b
     int speed;                  // Hunters speed
 	int animationFrame;		    // Animation frame of hunter
@@ -105,9 +106,135 @@ typedef struct {
     int speed;		            // Speed of the albatros
     int color;		            // Color scheme
     int stage;                  // Stage of rescuing the swallow
-    int animationFrame;		    // Animation frame of taxi
-
 } TAXI;
+
+typedef struct {
+    WIN* playWin;               // Play Window where hunter is shown
+    int x, y;		            // Position on screen
+    int color;		            // Color scheme
+    int dx;                     // direction to move the Boss
+    float a, b;                 // Values of func to move Boss y=ax+b
+    int speed;                  // Bosses speed
+    float enterTime;		    // Time when boss shoud enter the game
+    bool onTheScreen;		    // Says if the Boss already jumped on the screen True/False
+} Boss;
+
+void UpdateBoss(Boss* boss, Swallow* swallow)
+{
+    boss->speed = rand() % MAX_BOSS_SPEED + 1;
+
+    if (boss->x < swallow->x)
+        boss->dx = 1;
+    else
+        boss->dx = -1;
+
+    if (boss->x - swallow->x != 0)
+        boss->a = (float)(boss->y - swallow->y) / (float)(boss->x - swallow->x);
+    else
+        boss->a = 0;
+
+    boss->b = swallow->y - (boss->a * swallow->x);
+}
+
+void DrawBoss(Boss* boss)
+{
+    wattron(boss->playWin->window, COLOR_PAIR(boss->color));
+    mvwprintw(boss->playWin->window, boss->y, boss->x, " ");
+}
+
+void SpawnBoss(Boss* boss, CONFIG_FILE* config, Swallow* swallow)
+{
+    boss->playWin = swallow->playWin;
+    boss->x = COLS * (rand() % 2);
+    boss->y = rand() % ROWS;
+    boss->color = BOSS_COLOR;
+    UpdateBoss(boss, swallow);
+    boss->enterTime = config->start_time - config->start_time / BOSS_ENTER_PART;
+    boss->onTheScreen = false;
+}
+
+void CheckBossCollision(Swallow* swallow, Boss* boss, CONFIG_FILE* config, SafeZone* safeZone, float* timer)
+{
+    float dx = boss->x - swallow->x;
+    float dy = boss->y - swallow->y;
+    float minimum_distance = config->max_swallow_health + swallow->hp - 2;
+    float distance = dx * dx + dy * dy;
+    if (distance <= (minimum_distance * minimum_distance))
+    {
+        SpawnBoss(boss, config, swallow);
+
+        swallow->hp -= 1;
+    }
+
+    // for spawn zone
+    if (safeZone->active)
+    {
+        dx = boss->x - COLS / 2;
+        dy = boss->y - ROWS / 2;
+        distance = dx * dx + dy * dy;
+        if (distance <= 4 * safeZone->range * safeZone->range)
+            SpawnBoss(boss, config, swallow);
+    }
+
+}
+
+void MoveBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config, SafeZone* safeZone, float* timer)
+{
+    if (*timer < boss->enterTime)
+        return;
+    DrawBoss(boss);
+
+    for (int i = 0; i < boss->speed; i++)
+    {
+        boss->x += boss->dx;
+        boss->y = (boss->a * boss->x) + boss->b;
+
+        if (!boss->onTheScreen)
+        {
+            if (boss->x <= COLS - 2 && boss->x >= 1 && boss->y <= ROWS - 2 && boss->y >= 0)
+                boss->onTheScreen = true;
+            else
+                break;
+        }
+
+
+        if (boss->y < 0)
+        {
+            boss->y = 0;
+            boss->a *= -1;
+            boss->b = boss->y - (boss->a * boss->x);
+            UpdateBoss(boss, swallow);
+        }
+        else if (boss->y > ROWS - 2)
+        {
+            boss->y = ROWS - 2;
+            boss->a *= -1;
+            boss->b = boss->y - (boss->a * boss->x);
+            UpdateBoss(boss, swallow);
+        }
+
+
+        if (boss->x < 1)
+        {
+            boss->x = 1;
+            boss->a *= -1;
+            boss->b = boss->y - (boss->a * boss->x);
+            boss->dx *= -1;
+            UpdateBoss(boss, swallow);
+        }
+        else if (boss->x > COLS - 2)
+        {
+            boss->x = COLS - 2;
+            boss->a *= -1;
+            boss->b = boss->y - (boss->a * boss->x);
+            boss->dx *= -1;
+            UpdateBoss(boss, swallow);
+        }
+
+        if (!safeZone->active)
+            CheckBossCollision(swallow, boss, config, safeZone, timer);
+    }
+}
 
 void SpawnHunter(Hunter* tempHunter, Swallow* swallow, CONFIG_FILE* config, float* timer)
 {
@@ -211,8 +338,6 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config
         if (distance <= 4 * safeZone->range * safeZone->range)
             SpawnHunter(hunter, swallow, config, timer);
     }
-    
-
 }
 
 void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CONFIG_FILE* config, SafeZone* safeZone, float* timer)
@@ -255,7 +380,6 @@ void SetTaxi(TAXI* taxi, Swallow* swallow)
 
     taxi->color = ALBATROS_TAXI_COLOR;
     taxi->stage = 4;
-    taxi->animationFrame = 0;
 }
 
 void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters, CONFIG_FILE* config, float* timer, SafeZone* safeZone, TAXI* taxi)
@@ -735,6 +859,7 @@ WINDOW* Start()
     init_pair(STAR_COLOR, COLOR_YELLOW, COLOR_BLACK);
     init_pair(STAR2_COLOR, COLOR_WHITE, COLOR_BLACK);
     init_pair(SAFE_ZONE_COLOR, COLOR_CYAN, COLOR_CYAN);
+    init_pair(BOSS_COLOR, COLOR_MAGENTA, COLOR_MAGENTA);
 
     //makes input invisible
     noecho();
@@ -855,7 +980,7 @@ void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying)
     }
 }
 
-void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters, SafeZone* safeZone, TAXI* taxi)
+void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters, SafeZone* safeZone, TAXI* taxi, Boss* boss)
 {
     int ch;
     float *timer = (float*)malloc(sizeof(float));
@@ -871,6 +996,8 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
         if (ch == ESCAPE || *timer <= 0 || swallow->hp <= 0) break;
         else if (*timer <= 0) break;
         else PlayerMovement(swallow, ch, stars, hunters, config, timer, safeZone, taxi);
+
+        MoveBoss(boss, swallow, config, safeZone, timer);
 
         if (taxi->stage >= 0 && taxi->stage <= 3)
         {
@@ -967,6 +1094,11 @@ int main()
             config
         );
 
+        Boss* boss = (Boss*)malloc(sizeof(Boss));
+        SpawnBoss(boss, config, swallow);
+
+        UpdateBoss(boss, swallow);
+
         Star** stars = InitStars(playWin, STAR_COLOR, STAR2_COLOR, config);
         
         Hunter** hunters = InitHunters(playWin, HUNTER_COLOR, swallow, config);
@@ -979,7 +1111,7 @@ int main()
         
         wrefresh(mainWin);
 
-        Update(playWin, statusWin, lifeWin, config, swallow, stars, hunters, safeZone, taxi);
+        Update(playWin, statusWin, lifeWin, config, swallow, stars, hunters, safeZone, taxi, boss);
 
         PlayAgain(playWin, swallow, isPlaying);
 
