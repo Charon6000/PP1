@@ -250,7 +250,7 @@ void SetTaxi(TAXI* taxi, Swallow* swallow)
     taxi->y = 1;
     taxi->speed = ALBATROS_SPEED;
 
-    taxi->color = TAXI_COLOR;
+    taxi->color = ALBATROS_TAXI_COLOR;
     taxi->stage = 4;
     taxi->animationFrame = 0;
 }
@@ -290,7 +290,7 @@ void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters,
         break;
 
     case ' ':
-        if (taxi->stage > 3)
+        if (taxi->stage >= 3)
         {
             SetTaxi(taxi, swallow);
             taxi->stage = 0;
@@ -507,6 +507,37 @@ void DrawStars(WIN* playWin, Star* star, Swallow* swallow)
     }
 }
 
+void DrawSafeZone(SafeZone* safeZone, Swallow* swallow)
+{
+    wattron(safeZone->playWin->window, COLOR_PAIR(safeZone->color));
+    for (int x = COLS / 2 - 2 * safeZone->range; x <= COLS / 2 + 2 * safeZone->range; x++)
+    {
+        for (int y = ROWS / 2 - safeZone->range; y <= ROWS / 2 + safeZone->range; y++)
+        {
+            float dx = (x - safeZone->x);
+            float dy = (y - safeZone->y);
+
+            if (0.25 * dx * dx + dy * dy <= 4 * safeZone->range * safeZone->range)
+            {
+                dx = x - swallow->x;
+                dy = y - swallow->y;
+
+                float distance = dx * dx + dy * dy;
+                if (distance > swallow->hp * swallow->hp * 2)
+                {
+                    mvwprintw(safeZone->playWin->window, y, x, " ");
+                }
+            }
+        }
+    }
+}
+
+void DrawTaxi(TAXI* taxi)
+{
+    wattron(taxi->playWin->window, COLOR_PAIR(taxi->color));
+    mvwprintw(taxi->playWin->window, (int)taxi->y, (int)taxi->x, " ");
+}
+
 void MoveTaxi(TAXI* taxi, Swallow* swallow, SafeZone* safeZone)
 {
     if (taxi->stage > 2)
@@ -549,33 +580,7 @@ void MoveTaxi(TAXI* taxi, Swallow* swallow, SafeZone* safeZone)
     taxi->x += dx * taxi->speed;
     taxi->y += dy * taxi->speed;
 
-    wattron(taxi->playWin->window, COLOR_PAIR(taxi->color));
-    mvwprintw(taxi->playWin->window, (int)taxi->y, (int)taxi->x, " ");
-}
-
-void DrawSafeZone(SafeZone* safeZone, Swallow* swallow)
-{
-    wattron(safeZone->playWin->window, COLOR_PAIR(safeZone->color));
-    for (int x = COLS / 2 - 2 * safeZone->range; x <= COLS / 2 + 2 * safeZone->range; x++)
-    {
-        for (int y = ROWS / 2 - safeZone->range; y <= ROWS / 2 + safeZone->range; y++)
-        {
-            float dx = (x - safeZone->x);
-            float dy = (y - safeZone->y);
-
-            if (0.25 * dx * dx + dy * dy <= 4 * safeZone->range * safeZone->range)
-            {
-                dx = x - swallow->x;
-                dy = y - swallow->y;
-
-                float distance = dx * dx + dy * dy;
-                if (distance > swallow->hp * swallow->hp * 2)
-                {
-                    mvwprintw(safeZone->playWin->window, y, x, " ");
-                }
-            }
-        }
-    }
+    DrawTaxi(taxi);
 }
 
 void CleanWin(WIN* W, int border)
@@ -698,13 +703,12 @@ WINDOW* Start()
 	init_pair(PLAY_COLOR, COLOR_CYAN, COLOR_BLACK);
 	init_pair(SWALLOW_COLOR, COLOR_GREEN, COLOR_BLACK);
     init_pair(HUNTER_COLOR, COLOR_RED, COLOR_BLACK);
-    init_pair(ALBATROS_TAXI_COLOR, COLOR_BLUE, COLOR_BLACK);
+    init_pair(ALBATROS_TAXI_COLOR, COLOR_YELLOW, COLOR_YELLOW);
     init_pair(END_COLOR, COLOR_RED, COLOR_BLACK);
     init_pair(AGAIN_COLOR, COLOR_MAGENTA, COLOR_BLACK);
     init_pair(STAR_COLOR, COLOR_YELLOW, COLOR_BLACK);
     init_pair(STAR2_COLOR, COLOR_WHITE, COLOR_BLACK);
-    init_pair(SAFE_ZONE_COLOR, COLOR_YELLOW, COLOR_YELLOW);
-    init_pair(TAXI_COLOR, COLOR_WHITE, COLOR_WHITE);
+    init_pair(SAFE_ZONE_COLOR, COLOR_CYAN, COLOR_CYAN);
 
     //makes input invisible
     noecho();
