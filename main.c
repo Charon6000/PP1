@@ -8,13 +8,14 @@
 
 #define REFRESH_TIME 100                // Frequency of refreshing the screen
 #define START_PLAYER_SPEED 1            // Speed that player have on the start of a game     
-#define BOSS_ENTER_PART 1               // The part of the game in which Boss enters the game (2 -> 1/2, 4 -> 1/4 etz)     
+#define BOSS_ENTER_PART 60               // The part of the game in which Boss enters the game (2 -> 1/2, 4 -> 1/4 etz)     
 #define MAX_BOSS_SPEED 3                // Speed of Boss at maximum
 
 #define ESCAPE      'q'                 // Button to quit the game
 #define REPEAT      'r'                 // Button to play again
 #define SAFE_ZONE   ' '                 // Button to call the safe zone
 #define ALBATROS_SPEED   2              // Speed of the albatros taxi
+#define HUNTER_ATTACK_AFTER_TIME   1             
 
 #define BORDER		1		            // Border width (in characters)
 #define ROWS		40		            // Play window height (rows)
@@ -80,7 +81,8 @@ typedef struct {
 	int animationFrame;		    // Animation frame of hunter
     int boundsCounter;		    // Value of possible bounds
     short int onTheScreen;		// Says if the hunter already jumped on the screen (0-1)
-    bool followSwallow;
+    short int huntersStage;
+    float hunterWaitTime;
 } Hunter;
 
 typedef struct {
@@ -303,7 +305,9 @@ void SpawnHunter(Hunter* tempHunter, Swallow* swallow, CONFIG_FILE* config, floa
     tempHunter->onTheScreen = false;
     tempHunter->x = COLS * (rand() % 2 );
     tempHunter->y = rand() % ROWS;
-    tempHunter->followSwallow = false;
+    tempHunter->huntersStage = 0;
+    tempHunter->size = rand() % config->max_hunters_size + 1;
+    tempHunter->hunterWaitTime = 0;
 
     if (tempHunter->x < swallow->x)
         tempHunter->dx = 1;
@@ -317,7 +321,6 @@ void SpawnHunter(Hunter* tempHunter, Swallow* swallow, CONFIG_FILE* config, floa
 
     tempHunter->b = swallow->y - (tempHunter->a * swallow->x);
 
-    tempHunter->size = rand() % config->max_hunters_size + 1;
     tempHunter->animationFrame = 0;
     if (*timer == 0)
         tempHunter->boundsCounter = 0;
@@ -381,7 +384,8 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config
 {
     float dx = hunter->x-swallow->x;
     float dy = hunter->y-swallow->y;
-    float minimum_distance = hunter->size + swallow->hp-2;
+    float minimum_distance = hunter->size + swallow->hp - 2;
+    float second_minimum_distance = hunter->size + config->max_swallow_health;
     float distance =dx*dx+dy*dy;
 
     // for spawn zone
@@ -399,8 +403,11 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config
 
         swallow->hp -= 1;
     }
-    else if (distance <= 4* (minimum_distance * minimum_distance))
-        hunter->followSwallow = true;
+    else if (distance <= 4 * (second_minimum_distance * second_minimum_distance) && hunter->huntersStage == 0)
+    {
+        hunter->huntersStage = 1;
+        hunter->hunterWaitTime = *timer;
+    }
 }
 
 void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CONFIG_FILE* config, SafeZone* safeZone, float* timer)
@@ -564,7 +571,7 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
     if (hunter->boundsCounter <= 0)
         SpawnHunter(hunter, swallow, config, timer);
 
-    if (!hunter->followSwallow)
+    if (hunter->huntersStage != 1)
     {
         for (int i = 0; i < hunter->speed; i++)
         {
@@ -586,6 +593,7 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
                 hunter->a *= -1;
                 hunter->b = hunter->y - (hunter->a * hunter->x);
                 hunter->boundsCounter -= 1;
+                hunter->huntersStage = 0;
             }
             else if (hunter->y > ROWS - 2)
             {
@@ -593,6 +601,7 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
                 hunter->a *= -1;
                 hunter->b = hunter->y - (hunter->a * hunter->x);
                 hunter->boundsCounter -= 1;
+                hunter->huntersStage = 0;
             }
 
 
@@ -603,6 +612,7 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
                 hunter->b = hunter->y - (hunter->a * hunter->x);
                 hunter->dx *= -1;
                 hunter->boundsCounter -= 1;
+                hunter->huntersStage = 0;
             }
             else if (hunter->x > COLS - 2)
             {
@@ -611,18 +621,34 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
                 hunter->b = hunter->y - (hunter->a * hunter->x);
                 hunter->dx *= -1;
                 hunter->boundsCounter -= 1;
+                hunter->huntersStage = 0;
             }
+
             if (!safeZone->active)
                 CheckHuntersCollision(swallow, hunter, config, safeZone, timer);
         }
     }
     else
     {
-        float x = hunter->x, y = hunter->y;
-        SpawnHunter(hunter, swallow, config, timer);
-        hunter->x = x;
-        hunter->y = y;
-        hunter->speed = 3;
+        if (hunter->hunterWaitTime - *timer < HUNTER_ATTACK_AFTER_TIME)
+        {
+            hunter->speed = 0;
+            return;
+        }
+
+        if (hunter->x < swallow->x)
+            hunter->dx = 1;
+        else
+            hunter->dx = -1;
+
+        if (hunter->x - swallow->x != 0)
+            hunter->a = (float)(hunter->y - swallow->y) / (float)(hunter->x - swallow->x);
+        else
+            hunter->a = 0;
+
+        hunter->b = swallow->y - (hunter->a * swallow->x);
+        hunter->huntersStage = 2;
+        hunter->speed = 1;
     }
 }
 
