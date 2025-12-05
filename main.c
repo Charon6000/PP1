@@ -9,22 +9,14 @@
 #include <math.h>                       // Helps with the mathematic problems that couldn't be solved without it
 
 #define REFRESH_TIME 100                // Frequency of refreshing the screen
-#define START_PLAYER_SPEED 1            // Speed that player have on the start of a game     
-#define BOSS_ENTER_PART 60               // The part of the game in which Boss enters the game (2 -> 1/2, 4 -> 1/4 etz)     
-#define MAX_BOSS_SPEED 3                // Speed of Boss at maximum
-#define MAX_LEVELS_COUNT 5                // Speed of Boss at maximum
+#define START_PLAYER_SPEED 1            // Speed that player have on the start of a game         
+#define MAX_LEVELS_COUNT 5              // Speed of Boss at maximum
 
 #define ESCAPE      'q'                 // Button to quit the game
 #define REPEAT      'r'                 // Button to play again
 #define SAFE_ZONE   ' '                 // Button to call the safe zone
-#define ALBATROS_SPEED   2              // Speed of the albatros taxi
-#define HUNTER_ATTACK_AFTER_TIME   1             
-#define BOSS_DAMAGE   1             
-#define STARS_SCORING_WEIGHT   1             
 
 #define BORDER		1		            // Border width (in characters)
-#define ROWS		40		            // Play window height (rows)
-#define COLS		120		            // Play window width (columns)
 #define OFFY		5		            // Y offset from top of screen
 #define LIFEWINY    3		            // Height of life status window
 #define OFFX		5		            // X offset from left of screen
@@ -104,7 +96,8 @@ typedef struct {
     int fallingSpeed;           // Stars falling speed
 	int color;		            // Color scheme
 	int color2;		            // Color scheme while shifting
-	int animationFrame;		    // Color scheme
+    int animationFrame;		    // Color scheme
+    int stars_scoring_weight;	
 } Star;
 
 typedef struct {
@@ -134,13 +127,14 @@ typedef struct {
     float enterTime;		    // Time when boss shoud enter the game
     int size;		            // Actual size of boss
     bool onTheScreen;		    // Says if the Boss already jumped on the screen True/False
+    int bossDamage;             // Damage that boss gives the swallow
 } Boss;
 
 void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
 {
     // Resizing the boss and randomizing his speed to match the level
     boss->size = config->max_swallow_health - swallow->hp + 1;
-    boss->speed = rand() % (MAX_BOSS_SPEED-1) + 2;
+    boss->speed = rand() % (config->max_boss_speed-1) + 2;
 
     // Calculating swallows predicted future velocity
     float swallows_velocity_x = swallow->dx * swallow->speed;
@@ -193,8 +187,8 @@ void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
     else
     {
         // To unaible "teleportation" we need to change the position of the Boss
-        boss->x = COLS * (rand() % 2);
-        boss->y = rand() % ROWS;
+        boss->x = config->cols * (rand() % 2);
+        boss->y = rand() % config->rows;
         UpdateBoss(boss, swallow, config);
     }
 
@@ -221,12 +215,13 @@ void DrawBoss(Boss* boss)
 void SpawnBoss(Boss* boss, CONFIG_FILE* config, Swallow* swallow)
 {
     boss->playWin = swallow->playWin;
-    boss->x = COLS * (rand() % 2);
-    boss->y = rand() % ROWS;
+    boss->x = config->cols * (rand() % 2);
+    boss->y = rand() % config->rows;
     boss->color = BOSS_COLOR;
     UpdateBoss(boss, swallow, config);
-    boss->enterTime = (config->start_time / BOSS_ENTER_PART);
+    boss->enterTime = (config->start_time / config->boss_enter_part);
     boss->onTheScreen = false;
+    boss->bossDamage = config->boss_damage;
 }
 
 void CheckBossCollision(Swallow* swallow, Boss* boss, CONFIG_FILE* config, SafeZone* safeZone, float* timer)
@@ -240,14 +235,14 @@ void CheckBossCollision(Swallow* swallow, Boss* boss, CONFIG_FILE* config, SafeZ
     // for spawn zone
     if (safeZone->active)
     {
-        dx = boss->x - COLS / 2;
-        dy = boss->y - ROWS / 2;
+        dx = boss->x - config->cols / 2;
+        dy = boss->y - config->rows / 2;
         distance = dx * dx + dy * dy;
         if (distance <= 4 * safeZone->range * safeZone->range)
             SpawnBoss(boss, config, swallow);
     }else if (distance <= (minimum_distance * minimum_distance))
     {
-        swallow->hp -= BOSS_DAMAGE;
+        swallow->hp -= boss->bossDamage;
         SpawnBoss(boss, config, swallow);
     }
 
@@ -266,7 +261,7 @@ void MoveBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config, SafeZone* safeZ
 
         if (!boss->onTheScreen)
         {
-            if (boss->x <= COLS - 2 && boss->x >= 1 && boss->y <= ROWS - 2 && boss->y >= 0)
+            if (boss->x <= config->cols - 2 && boss->x >= 1 && boss->y <= config->rows - 2 && boss->y >= 0)
                 boss->onTheScreen = true;
             else
                 break;
@@ -280,9 +275,9 @@ void MoveBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config, SafeZone* safeZ
             boss->b = boss->y - (boss->a * boss->x);
             UpdateBoss(boss, swallow, config);
         }
-        else if (boss->y > ROWS - 2)
+        else if (boss->y > config->rows - 2)
         {
-            boss->y = ROWS - 2;
+            boss->y = config->rows - 2;
             boss->a *= -1;
             boss->b = boss->y - (boss->a * boss->x);
             UpdateBoss(boss, swallow, config);
@@ -297,9 +292,9 @@ void MoveBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config, SafeZone* safeZ
             boss->dx *= -1;
             UpdateBoss(boss, swallow, config);
         }
-        else if (boss->x > COLS - 2)
+        else if (boss->x > config->cols - 2)
         {
-            boss->x = COLS - 2;
+            boss->x = config->cols - 2;
             boss->a *= -1;
             boss->b = boss->y - (boss->a * boss->x);
             boss->dx *= -1;
@@ -316,8 +311,8 @@ void SpawnHunter(Hunter* tempHunter, Swallow* swallow, CONFIG_FILE* config, floa
     tempHunter->speed = rand() % config->max_hunters_speed + 1;
 
     tempHunter->onTheScreen = false;
-    tempHunter->x = COLS * (rand() % 2 );
-    tempHunter->y = rand() % ROWS;
+    tempHunter->x = config->cols * (rand() % 2 );
+    tempHunter->y = rand() % config->rows;
     tempHunter->huntersStage = 0;
     tempHunter->size = rand() % config->max_hunters_size + 1;
     tempHunter->hunterWaitTime = 0;
@@ -388,7 +383,7 @@ CONFIG_FILE* getConfigInfo(char* adress)
         &cfile->hunter_attack_after_time,
         &cfile->albatros_taxi_speed,
         &cfile->max_boss_speed,
-        &cfile->boss_enter_part,
+        &cfile->boss_enter_part,                    // The part of the game in which Boss enters the game (2 -> 1/2, 4 -> 1/4 etz)
         &cfile->boss_damage);
     fclose(ofile);
 
@@ -396,7 +391,7 @@ CONFIG_FILE* getConfigInfo(char* adress)
 
 }
 
-void CheckStarsCollision(Swallow* swallow, Star* star)
+void CheckStarsCollision(Swallow* swallow, Star* star, CONFIG_FILE* config)
 {
     float dx = star->x-swallow->x;
     float dy = star->y-swallow->y;
@@ -404,8 +399,8 @@ void CheckStarsCollision(Swallow* swallow, Star* star)
     {
         //respawn
         star->y = -10;
-        star->x = rand()%(COLS-1) +1;
-        swallow->wallet +=STARS_SCORING_WEIGHT;
+        star->x = rand()%(config->cols-1) +1;
+        swallow->wallet +=star->stars_scoring_weight;
     }
 }
 
@@ -420,8 +415,8 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config
     // for spawn zone
     if(safeZone->active)
     {
-        dx = hunter->x - COLS / 2;
-        dy = hunter->y - ROWS / 2;
+        dx = hunter->x - config->cols / 2;
+        dy = hunter->y - config->rows / 2;
         distance = dx * dx + dy * dy;
         if (distance <= 4 * safeZone->range * safeZone->range)
             SpawnHunter(hunter, swallow, config, timer);
@@ -446,7 +441,7 @@ void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CO
 
     for (int i = 0; i < config->max_stars_count; i++)
     {
-        CheckStarsCollision(swallow, stars[i]);
+        CheckStarsCollision(swallow, stars[i], config);
     }
     
     for (int i = 0; i < config->max_hunters_count; i++)
@@ -458,22 +453,22 @@ void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CO
     
 }
 
-void SetSafeZone(SafeZone* zone, Swallow* swallow, bool active)
+void SetSafeZone(SafeZone* zone, Swallow* swallow, bool active, CONFIG_FILE* config)
 {
     zone->playWin = swallow->playWin;
     zone->range = swallow->hp;
-    zone->x = COLS / 2;
-    zone->y = ROWS / 2;
+    zone->x = config->cols / 2;
+    zone->y = config->rows / 2;
     zone->active = active;
     zone->color = SAFE_ZONE_COLOR;
 }
 
-void SetTaxi(TAXI* taxi, Swallow* swallow)
+void SetTaxi(TAXI* taxi, Swallow* swallow, CONFIG_FILE* config)
 {
     taxi->playWin = swallow->playWin;
-    taxi->x = COLS/2;
+    taxi->x = config->cols/2;
     taxi->y = 1;
-    taxi->speed = ALBATROS_SPEED;
+    taxi->speed = config->albatros_taxi_speed;
     taxi->dx = 0;
     taxi->dy = 0;
 
@@ -518,7 +513,7 @@ void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters,
     case ' ':
         if (taxi->stage >= 3)
         {
-            SetTaxi(taxi, swallow);
+            SetTaxi(taxi, swallow, config);
             taxi->stage = 0;
         }
         break;
@@ -530,15 +525,15 @@ void PlayerMovement(Swallow* swallow, int input, Star** stars, Hunter** hunters,
     {
         swallow->y += swallow->dy;
         if(swallow->y > 0)
-            swallow->y %= ROWS;
+            swallow->y %= config->rows;
         else
-            swallow->y = ROWS;
+            swallow->y = config->rows;
 
         swallow->x += swallow->dx;
         if(swallow->x > 0)
-            swallow->x %= COLS;
+            swallow->x %= config->cols;
         else
-            swallow->x = COLS;
+            swallow->x = config->cols;
         
         CheckSwallowsCollision(swallow, stars, hunters, config, safeZone, timer);
     }
@@ -609,7 +604,7 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
 
             if (hunter->onTheScreen == 0)
             {
-                if (hunter->x <= COLS - 2 && hunter->x >= 1 && hunter->y <= ROWS - 2 && hunter->y >= 0)
+                if (hunter->x <= config->cols - 2 && hunter->x >= 1 && hunter->y <= config->rows - 2 && hunter->y >= 0)
                     hunter->onTheScreen = 1;
                 else
                     break;
@@ -624,9 +619,9 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
                 hunter->boundsCounter -= 1;
                 hunter->huntersStage = 0;
             }
-            else if (hunter->y > ROWS - 2)
+            else if (hunter->y > config->rows - 2)
             {
-                hunter->y = ROWS - 2;
+                hunter->y = config->rows - 2;
                 hunter->a *= -1;
                 hunter->b = hunter->y - (hunter->a * hunter->x);
                 hunter->boundsCounter -= 1;
@@ -643,9 +638,9 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
                 hunter->boundsCounter -= 1;
                 hunter->huntersStage = 0;
             }
-            else if (hunter->x > COLS - 2)
+            else if (hunter->x > config->cols - 2)
             {
-                hunter->x = COLS - 2;
+                hunter->x = config->cols - 2;
                 hunter->a *= -1;
                 hunter->b = hunter->y - (hunter->a * hunter->x);
                 hunter->dx *= -1;
@@ -659,7 +654,7 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
     }
     else
     {
-        if (hunter->hunterWaitTime - *timer < HUNTER_ATTACK_AFTER_TIME)
+        if (hunter->hunterWaitTime - *timer < config->hunter_attack_after_time)
         {
             hunter->speed = 0;
             return;
@@ -736,7 +731,7 @@ void DrawHunter(WIN* playWin, Hunter* hunter, Swallow* swallow)
     hunter->animationFrame +=1;
 }
 
-void DrawStars(WIN* playWin, Star* star, Swallow* swallow)
+void DrawStars(WIN* playWin, Star* star, Swallow* swallow, CONFIG_FILE* config)
 {
     if(star->animationFrame % 3)
 	    wattron(playWin->window, COLOR_PAIR(star->color));
@@ -753,22 +748,22 @@ void DrawStars(WIN* playWin, Star* star, Swallow* swallow)
     {
         star->y += 1;
 
-        CheckStarsCollision(swallow, star);
+        CheckStarsCollision(swallow, star, config);
 
-        if(star->y >= ROWS-1)
+        if(star->y >= config->rows-1)
         {
-            star->y %= ROWS-1;
-            star->x = rand()%(COLS-1) +1;
+            star->y %= config->rows-1;
+            star->x = rand()%(config->cols-1) +1;
         }
     }
 }
 
-void DrawSafeZone(SafeZone* safeZone, Swallow* swallow)
+void DrawSafeZone(SafeZone* safeZone, Swallow* swallow, CONFIG_FILE* config)
 {
     wattron(safeZone->playWin->window, COLOR_PAIR(safeZone->color));
-    for (int x = COLS / 2 - 2 * safeZone->range; x <= COLS / 2 + 2 * safeZone->range; x++)
+    for (int x = config->cols / 2 - 2 * safeZone->range; x <= config->cols / 2 + 2 * safeZone->range; x++)
     {
-        for (int y = ROWS / 2 - safeZone->range; y <= ROWS / 2 + safeZone->range; y++)
+        for (int y = config->rows / 2 - safeZone->range; y <= config->rows / 2 + safeZone->range; y++)
         {
             float dx = (x - safeZone->x);
             float dy = (y - safeZone->y);
@@ -817,7 +812,7 @@ void DrawTaxi(TAXI* taxi)
 
 }
 
-void MoveTaxi(TAXI* taxi, Swallow* swallow, SafeZone* safeZone)
+void MoveTaxi(TAXI* taxi, Swallow* swallow, SafeZone* safeZone, CONFIG_FILE* config)
 {
     if (taxi->stage > 2)
     {
@@ -833,13 +828,13 @@ void MoveTaxi(TAXI* taxi, Swallow* swallow, SafeZone* safeZone)
     }
     else if(taxi->stage == 1)
     {
-        SetSafeZone(safeZone, swallow, true);
-        x = COLS/2;
-        y = ROWS/2;
+        SetSafeZone(safeZone, swallow, true, config);
+        x = config->cols/2;
+        y = config->rows/2;
     }
     else
     {
-        x = COLS / 2;
+        x = config->cols / 2;
         y = -1;
     }
 
@@ -913,12 +908,13 @@ Star** InitStars(WIN* playWin, int color, int color2, CONFIG_FILE* config)
     {
         Star* tempStar = (Star*)malloc(sizeof(Star));
         tempStar->playWin = playWin;
-        tempStar->x = rand()%COLS;
-        tempStar->y = -rand()%ROWS;
+        tempStar->x = rand()%config->cols;
+        tempStar->y = -rand()%config->rows;
         tempStar->fallingSpeed = rand()%config->max_stars_speed+1;
         tempStar->color = color;
         tempStar->color2 = color2;
         tempStar->animationFrame = 0;
+        tempStar->stars_scoring_weight = config->stars_scoring_weight;
         list[i] = tempStar;
     }
 
@@ -1000,7 +996,7 @@ WINDOW* Start()
 
 }
 
-void UpdateStatus(WIN* statusWin, Swallow* swallow)
+void UpdateStatus(WIN* statusWin, Swallow* swallow, CONFIG_FILE* config)
 {
 	// Set status bar color
 	wattron(statusWin->window, COLOR_PAIR(statusWin->color));
@@ -1013,16 +1009,16 @@ void UpdateStatus(WIN* statusWin, Swallow* swallow)
     char controls[] = "W (up), S (down), D (right), A (left) | O (slow down), P (go faster), SPACE (safe zone)";
 
     // Display status info
-	mvwprintw(statusWin->window, 1, (COLS-(sizeof(info)/sizeof(char)))/2, info);
+	mvwprintw(statusWin->window, 1, (config->cols-(sizeof(info)/sizeof(char)))/2, info);
 
 	// Display controls
-	mvwprintw(statusWin->window, 3, (COLS-(sizeof(controls)/sizeof(char)))/2, controls);
+	mvwprintw(statusWin->window, 3, (config->cols-(sizeof(controls)/sizeof(char)))/2, controls);
 
 	// Update display
 	wrefresh(statusWin->window);
 }
 
-void UpdateLifeInfo(WIN* lifeinfo, Swallow* swallow, float *timer)
+void UpdateLifeInfo(WIN* lifeinfo, Swallow* swallow, float *timer, CONFIG_FILE* config)
 {
     // Set status bar color
 	wattron(lifeinfo->window, COLOR_PAIR(lifeinfo->color));
@@ -1039,13 +1035,13 @@ void UpdateLifeInfo(WIN* lifeinfo, Swallow* swallow, float *timer)
 	mvwprintw(lifeinfo->window, 1, OFFX, life);
 
 	// Display controls
-	mvwprintw(lifeinfo->window, 1, COLS/3-OFFX, time);
+	mvwprintw(lifeinfo->window, 1, config->cols/3-OFFX, time);
 
 	// Update display
 	wrefresh(lifeinfo->window);
 }
 
-void EndScreen(WIN* playWin)
+void EndScreen(WIN* playWin, CONFIG_FILE* config)
 {
     CleanWin(playWin, BORDER);
 
@@ -1058,14 +1054,14 @@ void EndScreen(WIN* playWin)
     char endText[] = "Bye bye, thanks for playing!";
 
     //Display end text
-	mvwprintw(playWin->window, ROWS/2, (COLS-(sizeof(endText)/sizeof(char)))/2, endText);
+	mvwprintw(playWin->window, config->rows/2, (config->cols-(sizeof(endText)/sizeof(char)))/2, endText);
 
 	// Update display
 	wrefresh(playWin->window);
     sleep(1);
 }
 
-void AgainScreen(WIN* playWin, char *resultText)
+void AgainScreen(WIN* playWin, char *resultText, CONFIG_FILE* config)
 {
     CleanWin(playWin, BORDER);
 
@@ -1078,14 +1074,14 @@ void AgainScreen(WIN* playWin, char *resultText)
     char* question = "Click 'r' to play again and 'q' if you don't ;)";
 
     //Display result text
-	mvwprintw(playWin->window, ROWS/2-2, (COLS-(sizeof(resultText)/sizeof(char)))/2.2f, resultText);
-	mvwprintw(playWin->window, ROWS/2, (COLS-(sizeof(question)/sizeof(char)))/3.2f, question);
+	mvwprintw(playWin->window, config->rows/2-2, (config->cols-(sizeof(resultText)/sizeof(char)))/2.2f, resultText);
+	mvwprintw(playWin->window, config->rows/2, (config->cols-(sizeof(question)/sizeof(char)))/3.2f, question);
 
 	// Update display
 	wrefresh(playWin->window);
 }
 
-void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying)
+void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying, CONFIG_FILE* config)
 {
     int ch;
     char* resultText;
@@ -1094,7 +1090,7 @@ void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying)
     else
         resultText = "You have lost!";
     
-    AgainScreen(playWin, resultText);
+    AgainScreen(playWin, resultText, config);
 
     while(1)
     {
@@ -1121,14 +1117,14 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
         CleanWin(playWin, BORDER);
 
         *timer -= 0.1;
-        UpdateLifeInfo(lifeWin, swallow, timer);
+        UpdateLifeInfo(lifeWin, swallow, timer, config);
         if (ch == ESCAPE || *timer <= 0 || swallow->hp <= 0) break;
         else if (*timer <= 0) break;
         else PlayerMovement(swallow, ch, stars, hunters, config, timer, safeZone, taxi);
 
         for (int i = 0; i < config->max_stars_count; i++)
         {
-            DrawStars(playWin, stars[i], swallow);
+            DrawStars(playWin, stars[i], swallow, config);
         }
 
         MoveBoss(boss, swallow, config, safeZone, timer);
@@ -1143,10 +1139,10 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
             else
                 DrawSwallow(playWin, swallow);
 
-            MoveTaxi(taxi, swallow, safeZone);
+            MoveTaxi(taxi, swallow, safeZone, config);
 
             if(safeZone->active)
-                DrawSafeZone(safeZone, swallow);
+                DrawSafeZone(safeZone, swallow, config);
         }
         else
             DrawSwallow(playWin, swallow);
@@ -1163,7 +1159,7 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
 
         wrefresh(playWin->window);
 
-        UpdateStatus(statusWin, swallow);
+        UpdateStatus(statusWin, swallow, config);
 
         flushinp();
 
@@ -1234,17 +1230,17 @@ int main()
         WIN *lifeWin = InitWin(
             mainWin, 
             LIFEWINY, 
-            COLS/2, 
+            config->cols/2, 
             LIFEWINY-1, 
-            OFFY+COLS/4, 
+            OFFY+config->cols/4, 
             STAT_COLOR, 
             BORDER, 
             0);
 
         WIN *playWin = InitWin(
             mainWin, 
-            ROWS, 
-            COLS, 
+            config->rows, 
+            config->cols, 
             OFFY, 
             OFFX, 
             PLAY_COLOR, 
@@ -1254,8 +1250,8 @@ int main()
         WIN *statusWin = InitWin(
             mainWin, 
             OFFY, 
-            COLS, 
-            ROWS+OFFY, 
+            config->cols, 
+            config->rows+OFFY, 
             OFFX, 
             STAT_COLOR, 
             BORDER, 
@@ -1264,8 +1260,8 @@ int main()
 
         Swallow* swallow = InitSwallow(
             playWin,
-            COLS/2,
-            ROWS/2,
+            config->cols/2,
+            config->rows/2,
             0,
             -1,
             START_PLAYER_SPEED,
@@ -1285,17 +1281,17 @@ int main()
         SafeZone* safeZone = (SafeZone*)malloc(sizeof(SafeZone));
         TAXI* taxi = (TAXI*)malloc(sizeof(TAXI));
 
-        SetSafeZone(safeZone, swallow, false);
-        SetTaxi(taxi, swallow);
+        SetSafeZone(safeZone, swallow, false, config);
+        SetTaxi(taxi, swallow, config);
         
         wrefresh(mainWin);
 
         Update(playWin, statusWin, lifeWin, config, swallow, stars, hunters, safeZone, taxi, boss);
 
-        PlayAgain(playWin, swallow, isPlaying);
+        PlayAgain(playWin, swallow, isPlaying, config);
 
         if(!(*isPlaying))
-            EndScreen(playWin);
+            EndScreen(playWin, config);
 
         endwin();
 
