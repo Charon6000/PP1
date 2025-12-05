@@ -8,8 +8,8 @@
 
 #define REFRESH_TIME 100                // Frequency of refreshing the screen
 #define START_PLAYER_SPEED 1            // Speed that player have on the start of a game     
-#define BOSS_ENTER_PART 2               // The part of the game in which Boss enters the game (2 -> 1/2, 4 -> 1/4 etz)     
-#define MAX_BOSS_SPEED 5                // Speed of Boss at maximum
+#define BOSS_ENTER_PART 1               // The part of the game in which Boss enters the game (2 -> 1/2, 4 -> 1/4 etz)     
+#define MAX_BOSS_SPEED 3                // Speed of Boss at maximum
 
 #define ESCAPE      'q'                 // Button to quit the game
 #define REPEAT      'r'                 // Button to play again
@@ -122,20 +122,62 @@ typedef struct {
 
 void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
 {
+    // Resizing the boss and randomizing his speed to match the level
     boss->size = config->max_swallow_health - swallow->hp + 1;
-    boss->speed = rand() % MAX_BOSS_SPEED + 1;
+    boss->speed = rand() % (MAX_BOSS_SPEED-1) + 2;
 
-    if (boss->x < swallow->x)
+    // Calculating swallows predicted future velocity
+    float swallows_velocity_x = swallow->dx * swallow->speed;
+    float swallows_velocity_y = swallow->dy * swallow->speed;
+
+    // Calculating vector from boss to swallow
+    float boss_to_swallow_x = swallow->x - boss->x;
+    float boss_to_swallow_y = swallow->y - boss->y;
+
+    // Calculating predicted future swallows path with linear function
+    // We want to find time after which, swallow and boss will be at the same point. 
+    // This leads us to formula: | swallow position - boss_position + swallow_vector * time | = bosses_vector * time
+    float swallow_predicted_a = swallows_velocity_x * swallows_velocity_x + swallows_velocity_y * swallows_velocity_y - boss->speed * boss->speed;
+    float swallow_predicted_b = 2 * (boss_to_swallow_x * swallows_velocity_x + boss_to_swallow_y * swallows_velocity_y);
+    float swallow_predicted_c = boss_to_swallow_x * boss_to_swallow_x + boss_to_swallow_y * boss_to_swallow_y;
+
+    // We are using it to find the time of both boss and swallow predicted travel to meet eachother
+    float time;
+    float delta = swallow_predicted_b * swallow_predicted_b - 4 * swallow_predicted_a * swallow_predicted_c;
+    float delta_res = sqrt(delta);
+
+    // We need the time that is positiv
+    if (swallow_predicted_a != 0 && delta >= 0)
+    {
+        float t1 = (-swallow_predicted_b + delta_res) / (2 * swallow_predicted_a);
+        float t2 = (-swallow_predicted_b - delta_res) / (2 * swallow_predicted_a);
+        if (t1 > 0)
+            time = t1;
+        else if (t2 > 0)
+            time = t2;
+        else
+            time = 0;
+    }
+    else
+        time = 0;
+
+    // Calculating the meeting point, having the necessary time of the travel
+    float meeting_x = swallow->x + swallows_velocity_x * time;
+    float meeting_y = swallow->y + swallows_velocity_y * time;
+
+    // We need to know if we are moving boss left or right
+    if (boss->x < meeting_x)
         boss->dx = 1;
     else
         boss->dx = -1;
 
-    if (boss->x - swallow->x != 0)
-        boss->a = (float)(boss->y - swallow->y) / (float)(boss->x - swallow->x);
+    // Calculating a and b of the linear function being the future path of boss if possible
+    if (boss->x != meeting_x)
+        boss->a = (boss->y - meeting_y) / (boss->x - meeting_x);
     else
         boss->a = 0;
 
-    boss->b = swallow->y - (boss->a * swallow->x);
+    boss->b = meeting_y - boss->a * meeting_x;
 }
 
 void DrawBoss(Boss* boss)
@@ -162,7 +204,7 @@ void SpawnBoss(Boss* boss, CONFIG_FILE* config, Swallow* swallow)
     boss->y = rand() % ROWS;
     boss->color = BOSS_COLOR;
     UpdateBoss(boss, swallow, config);
-    boss->enterTime = config->start_time - config->start_time / BOSS_ENTER_PART;
+    boss->enterTime = (config->start_time / BOSS_ENTER_PART);
     boss->onTheScreen = false;
 }
 
@@ -170,7 +212,7 @@ void CheckBossCollision(Swallow* swallow, Boss* boss, CONFIG_FILE* config, SafeZ
 {
     float dx = boss->x - swallow->x;
     float dy = boss->y - swallow->y;
-    float minimum_distance = config->max_swallow_health + swallow->hp - 2;
+    float minimum_distance = boss->size + swallow->hp;
     float distance = dx * dx + dy * dy;
     
 
@@ -1014,6 +1056,7 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
             DrawStars(playWin, stars[i], swallow);
         }
 
+        MoveBoss(boss, swallow, config, safeZone, timer);
 
         if (taxi->stage >= 0 && taxi->stage <= 3)
         {
@@ -1033,7 +1076,6 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
         else
             DrawSwallow(playWin, swallow);
 
-        MoveBoss(boss, swallow, config, safeZone, timer);
 
         for (int i = 0; i < config->max_hunters_count; i++)
         {
