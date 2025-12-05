@@ -3,6 +3,8 @@
 #include <unistd.h>                     // Unix standard (usleep for timing)
 #include <ncurses.h>                    // Text-based UI library
 #include <time.h>                       // Time needed to random the seed
+#include <dirent.h>                       
+#include <string.h>
 
 #include <math.h>                       // Helps with the mathematic problems that couldn't be solved without it
 
@@ -10,12 +12,15 @@
 #define START_PLAYER_SPEED 1            // Speed that player have on the start of a game     
 #define BOSS_ENTER_PART 60               // The part of the game in which Boss enters the game (2 -> 1/2, 4 -> 1/4 etz)     
 #define MAX_BOSS_SPEED 3                // Speed of Boss at maximum
+#define MAX_LEVELS_COUNT 5                // Speed of Boss at maximum
 
 #define ESCAPE      'q'                 // Button to quit the game
 #define REPEAT      'r'                 // Button to play again
 #define SAFE_ZONE   ' '                 // Button to call the safe zone
 #define ALBATROS_SPEED   2              // Speed of the albatros taxi
 #define HUNTER_ATTACK_AFTER_TIME   1             
+#define BOSS_DAMAGE   1             
+#define STARS_SCORING_WEIGHT   1             
 
 #define BORDER		1		            // Border width (in characters)
 #define ROWS		40		            // Play window height (rows)
@@ -42,13 +47,21 @@ typedef struct {
 
     float start_time;           // Time to survive in the game
     int seed;                   // Number of seed to randomize the game
+    int rows;                   
+    int cols;                   
     int max_stars_count;        // Maximum amound of stars showed at the same time
     int max_stars_speed;        // Maximum speed that star can have
+    int stars_scoring_weight;        // Maximum speed that star can have
     int max_hunters_size;       // Maximum size of hunter
     int max_hunters_count;      // Maximum amound of hunters in game
     int max_hunters_speed;      // Maximum speed that hunter can have
     int max_hunters_bounds;     // Maximum amound of bounces that hunter can make
     int max_swallow_health;
+    int hunter_attack_after_time;
+    int albatros_taxi_speed;
+    int max_boss_speed;
+    int boss_enter_part;
+    int boss_damage;
 
 } CONFIG_FILE;
 
@@ -234,7 +247,7 @@ void CheckBossCollision(Swallow* swallow, Boss* boss, CONFIG_FILE* config, SafeZ
             SpawnBoss(boss, config, swallow);
     }else if (distance <= (minimum_distance * minimum_distance))
     {
-        swallow->hp -= 1;
+        swallow->hp -= BOSS_DAMAGE;
         SpawnBoss(boss, config, swallow);
     }
 
@@ -345,22 +358,38 @@ CONFIG_FILE* getConfigInfo(char* adress)
         ofile, 
         "start time = %f\n"
         "seed = %i\n"
+        "window rows = %d\n"
+        "window cols = %d\n"
         "max stars count = %d\n"
         "max stars speed = %d\n"
+        "stars scoring weight = %d\n"
         "max hunters size = %d\n"
         "max hunters count = %d\n"
         "max hunters speed = %d\n"
         "max hunters bounds = %d\n"
-        "max swallow health = %d", 
+        "max swallow health = %d\n"
+        "hunter attack after time = %d\n"
+        "albatros taxi speed = %d\n"
+        "max boss speed = %d\n"
+        "boss enter part = %d\n"
+        "boss damage = %d",
         &cfile->start_time, 
-        &cfile->seed, 
+        &cfile->seed,
+        &cfile->rows,
+        &cfile->cols,
         &cfile->max_stars_count, 
-        &cfile->max_stars_speed, 
+        &cfile->max_stars_speed,
+        &cfile->stars_scoring_weight,
         &cfile->max_hunters_size,
         &cfile->max_hunters_count,
         &cfile->max_hunters_speed, 
         &cfile->max_hunters_bounds, 
-        &cfile->max_swallow_health);
+        &cfile->max_swallow_health,
+        &cfile->hunter_attack_after_time,
+        &cfile->albatros_taxi_speed,
+        &cfile->max_boss_speed,
+        &cfile->boss_enter_part,
+        &cfile->boss_damage);
     fclose(ofile);
 
     return cfile;
@@ -376,7 +405,7 @@ void CheckStarsCollision(Swallow* swallow, Star* star)
         //respawn
         star->y = -10;
         star->x = rand()%(COLS-1) +1;
-        swallow->wallet +=1;
+        swallow->wallet +=STARS_SCORING_WEIGHT;
     }
 }
 
@@ -1142,9 +1171,59 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
     }
 }
 
+bool CheckConfigName(char** namesList, char fileName[100])
+{
+    for (int i = 0; i < MAX_LEVELS_COUNT && namesList[i]; i++)
+        if (strcmp(namesList[i], fileName))
+            return true;
+
+    return false;
+}
+
+void AskPlayer(char* playerName, char configAdress[100])
+{
+    DIR* dir;
+    struct dirent* plik;
+    char fileName[100];
+
+    char** namesList = (char**)malloc(sizeof(char*)*MAX_LEVELS_COUNT);
+    for (int i = 0; i < MAX_LEVELS_COUNT; i++)
+        namesList[i] = NULL;
+
+    printf("Podaj nazwę gracza: \n");
+    scanf("%s", playerName);
+
+    if (dir = opendir("./levels/"))
+    {
+        printf("\nWybierz poziom trudności:\n");
+
+        for (int i = 0;plik = readdir(dir);i++)
+        {
+            if (strcmp(plik->d_name, ".") == 0 || strcmp(plik->d_name, "..") == 0)
+                continue;
+
+            printf("%s\n", plik->d_name);
+            namesList[i] = plik->d_name;
+        }
+        closedir(dir);
+        scanf("%s", fileName);
+        strcat(configAdress, "./levels/");
+        strcat(configAdress, fileName);
+    }
+    else
+        strcpy(configAdress, ".conf");
+
+    if (!CheckConfigName(namesList, fileName))
+        strcpy(configAdress, ".conf");
+
+    free(namesList);
+}
+
 int main()
 {
-    CONFIG_FILE* config = getConfigInfo(".conf");
+    char playerName[100], configAdress[100];
+    AskPlayer(playerName, configAdress);
+    CONFIG_FILE* config = getConfigInfo(configAdress);
     srand(config->seed);
     bool* isPlaying = (bool*)malloc(sizeof(bool));
     *isPlaying = true;
