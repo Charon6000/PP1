@@ -80,6 +80,7 @@ typedef struct {
 	int animationFrame;		    // Animation frame of hunter
     int boundsCounter;		    // Value of possible bounds
     short int onTheScreen;		// Says if the hunter already jumped on the screen (0-1)
+    bool followSwallow;
 } Hunter;
 
 typedef struct {
@@ -156,10 +157,10 @@ void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
         else if (t2 > 0)
             time = t2;
         else
-            time = 0;
+            time = swallow->speed;
     }
     else
-        time = 0;
+        time = swallow->speed;
 
     // Calculating the meeting point, having the necessary time of the travel
     float meeting_x = swallow->x + swallows_velocity_x * time;
@@ -175,7 +176,12 @@ void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
     if (boss->x != meeting_x)
         boss->a = (boss->y - meeting_y) / (boss->x - meeting_x);
     else
-        boss->a = 0;
+    {
+        // To unaible "teleportation" we need to change the position of the Boss
+        boss->x = COLS * (rand() % 2);
+        boss->y = rand() % ROWS;
+        UpdateBoss(boss, swallow, config);
+    }
 
     boss->b = meeting_y - boss->a * meeting_x;
 }
@@ -297,6 +303,7 @@ void SpawnHunter(Hunter* tempHunter, Swallow* swallow, CONFIG_FILE* config, floa
     tempHunter->onTheScreen = false;
     tempHunter->x = COLS * (rand() % 2 );
     tempHunter->y = rand() % ROWS;
+    tempHunter->followSwallow = false;
 
     if (tempHunter->x < swallow->x)
         tempHunter->dx = 1;
@@ -392,6 +399,8 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config
 
         swallow->hp -= 1;
     }
+    else if (distance <= 4* (minimum_distance * minimum_distance))
+        hunter->followSwallow = true;
 }
 
 void CheckSwallowsCollision(Swallow* swallow, Star** stars, Hunter** hunters, CONFIG_FILE* config, SafeZone* safeZone, float* timer)
@@ -555,54 +564,65 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
     if (hunter->boundsCounter <= 0)
         SpawnHunter(hunter, swallow, config, timer);
 
-    for (int i = 0; i < hunter->speed; i++)
+    if (!hunter->followSwallow)
     {
-        hunter->x += hunter->dx;
-        hunter->y = (hunter->a * hunter->x) + hunter->b;
+        for (int i = 0; i < hunter->speed; i++)
+        {
+            hunter->x += hunter->dx;
+            hunter->y = (hunter->a * hunter->x) + hunter->b;
 
-        if (hunter->onTheScreen == 0)
-        {
-            if (hunter->x <= COLS - 2 && hunter->x >= 1 && hunter->y <= ROWS - 2 && hunter->y >= 0)
-                hunter->onTheScreen = 1;
-            else
-                break;
-        }
-        
-
-        if (hunter->y < 0)
-        {
-            hunter->y = 0;
-            hunter->a *= -1;
-            hunter->b = hunter->y - (hunter->a * hunter->x);
-            hunter->boundsCounter-=1;
-        }
-        else if (hunter->y > ROWS - 2)
-        {
-            hunter->y = ROWS - 2;
-            hunter->a *= -1;
-            hunter->b = hunter->y - (hunter->a * hunter->x);
-            hunter->boundsCounter-=1;
-        }
+            if (hunter->onTheScreen == 0)
+            {
+                if (hunter->x <= COLS - 2 && hunter->x >= 1 && hunter->y <= ROWS - 2 && hunter->y >= 0)
+                    hunter->onTheScreen = 1;
+                else
+                    break;
+            }
 
 
-        if (hunter->x < 1)
-        {
-            hunter->x = 1;
-            hunter->a *= -1;
-            hunter->b = hunter->y - (hunter->a * hunter->x);
-            hunter->dx *= -1;
-            hunter->boundsCounter-=1;
+            if (hunter->y < 0)
+            {
+                hunter->y = 0;
+                hunter->a *= -1;
+                hunter->b = hunter->y - (hunter->a * hunter->x);
+                hunter->boundsCounter -= 1;
+            }
+            else if (hunter->y > ROWS - 2)
+            {
+                hunter->y = ROWS - 2;
+                hunter->a *= -1;
+                hunter->b = hunter->y - (hunter->a * hunter->x);
+                hunter->boundsCounter -= 1;
+            }
+
+
+            if (hunter->x < 1)
+            {
+                hunter->x = 1;
+                hunter->a *= -1;
+                hunter->b = hunter->y - (hunter->a * hunter->x);
+                hunter->dx *= -1;
+                hunter->boundsCounter -= 1;
+            }
+            else if (hunter->x > COLS - 2)
+            {
+                hunter->x = COLS - 2;
+                hunter->a *= -1;
+                hunter->b = hunter->y - (hunter->a * hunter->x);
+                hunter->dx *= -1;
+                hunter->boundsCounter -= 1;
+            }
+            if (!safeZone->active)
+                CheckHuntersCollision(swallow, hunter, config, safeZone, timer);
         }
-        else if (hunter->x > COLS - 2)
-        {
-            hunter->x = COLS - 2;
-            hunter->a *= -1;
-            hunter->b = hunter->y - (hunter->a * hunter->x);
-            hunter->dx *= -1;
-            hunter->boundsCounter-=1;
-        }
-        if(!safeZone->active)
-            CheckHuntersCollision(swallow, hunter, config, safeZone, timer);
+    }
+    else
+    {
+        float x = hunter->x, y = hunter->y;
+        SpawnHunter(hunter, swallow, config, timer);
+        hunter->x = x;
+        hunter->y = y;
+        hunter->speed = 3;
     }
 }
 
