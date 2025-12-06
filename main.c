@@ -35,6 +35,7 @@
 #define SAFE_ZONE_COLOR         11      // Safe zone color
 #define TAXI_COLOR              12      // Color of a friendly albatros taxi
 #define BOSS_COLOR              13      // Color of a Boss
+#define RANKING_COLOR           14      // Color of the score table
 
 typedef struct {
 
@@ -1013,6 +1014,7 @@ WINDOW* Start()
     init_pair(STAR2_COLOR, COLOR_WHITE, COLOR_BLACK);
     init_pair(SAFE_ZONE_COLOR, COLOR_CYAN, COLOR_CYAN);
     init_pair(BOSS_COLOR, COLOR_MAGENTA, COLOR_MAGENTA);
+    init_pair(RANKING_COLOR, COLOR_YELLOW, COLOR_BLACK);
 
     //makes input invisible
     noecho();
@@ -1024,7 +1026,7 @@ WINDOW* Start()
 
 }
 
-void RankingStatus(WIN* rankingWin,CONFIG_FILE* config, char* level)
+void RankingStatus(WIN* rankingWin,CONFIG_FILE* config, char* level, char playerName[100])
 {
     // Set status bar color
     wattron(rankingWin->window, COLOR_PAIR(rankingWin->color));
@@ -1036,14 +1038,15 @@ void RankingStatus(WIN* rankingWin,CONFIG_FILE* config, char* level)
     snprintf(levelInfo, sizeof(levelInfo), "Level: %s", level);
 
     // Display status info
-    mvwprintw(rankingWin->window, 1, 2, levelInfo);
+    mvwprintw(rankingWin->window, 1, 2, playerName);
+    mvwprintw(rankingWin->window, 2, 2, levelInfo);
 
     Ranking** ranking = GetScores();
-    for (int i = 0; ranking[i] != NULL; i++)
+    for (int i = 0; ranking[i] != NULL && i +3 < config->rows; i++)
     {
-        snprintf(rankingInfo, sizeof(rankingInfo), "%d %s %f", ranking[i]->index, ranking[i]->nick, ranking[i]->points);
+        snprintf(rankingInfo, sizeof(rankingInfo), "%d %s %.2f", ranking[i]->index, ranking[i]->nick, ranking[i]->points);
+        mvwprintw(rankingWin->window, i+3, 2, rankingInfo);
     }
-
     // Update display
     wrefresh(rankingWin->window);
 }
@@ -1197,11 +1200,14 @@ void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying, CONFIG_FILE* con
 {
     int ch;
     char* resultText;
-    if(swallow->hp >0)
+    if (swallow->hp > 0)
+    {
         resultText = "You won, congarts!";
+        AddScore(swallow->wallet, playerName);
+    }
     else
         resultText = "You have lost!";
-    
+
     AgainScreen(playWin, resultText, config);
 
     while(1)
@@ -1279,7 +1285,7 @@ void AskPlayer(char* playerName, char configAdress[100], char* level)
     free(namesList);
 }
 
-void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,WIN* rankingWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters, SafeZone* safeZone, TAXI* taxi, Boss* boss, char* level)
+void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,WIN* rankingWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters, SafeZone* safeZone, TAXI* taxi, Boss* boss, char* level, char playerName[100])
 {
     int ch;
     float *timer = (float*)malloc(sizeof(float));
@@ -1333,7 +1339,7 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,WIN* rankingWin,CONFIG_FIL
         }
         
         UpdateStatus(statusWin, swallow, config);
-        RankingStatus(rankingWin, config, level);
+        RankingStatus(rankingWin, config, level, playerName);
 
         wrefresh(playWin->window);
         flushinp();
@@ -1359,7 +1365,7 @@ int main()
             20,
             OFFY,
             OFFX + config->cols,
-            PLAY_COLOR,
+            RANKING_COLOR,
             BORDER,
             0);
 
@@ -1423,7 +1429,7 @@ int main()
         
         wrefresh(mainWin);
 
-        Update(playWin, statusWin, lifeWin, rankingWin, config, swallow, stars, hunters, safeZone, taxi, boss, level);
+        Update(playWin, statusWin, lifeWin, rankingWin, config, swallow, stars, hunters, safeZone, taxi, boss, level, playerName);
 
         PlayAgain(playWin, swallow, isPlaying, config, playerName);
 
