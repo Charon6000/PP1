@@ -20,7 +20,7 @@
 #define OFFY		5		            // Y offset from top of screen
 #define LIFEWINY    3		            // Height of life status window
 #define OFFX		5		            // X offset from left of screen
-#define RANKING_COLS 40
+#define RANKING_COLS 50
 
 #define MAIN_COLOR	            1		// Main window color
 #define STAT_COLOR	            2		// Status bar color
@@ -144,7 +144,11 @@ void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
 {
     // Resizing the boss and randomizing his speed to match the level
     boss->size = config->max_swallow_health - swallow->hp + 1;
-    boss->speed = rand() % (config->max_boss_speed-1) + 2;
+    if (config->max_boss_speed > 1)
+        boss->speed = rand() % (config->max_boss_speed - 1) + 2;
+    else
+        boss->speed = 1;
+
 
     // Calculating swallows predicted future velocity
     float swallows_velocity_x = swallow->dx * swallow->speed;
@@ -1035,7 +1039,7 @@ WINDOW* Start()
 
 }
 
-void RankingStatus(WIN* rankingWin,CONFIG_FILE* config, char* level, char playerName[100])
+void RankingStatus(WIN* rankingWin, CONFIG_FILE* config, char* level, char playerName[100])
 {
     // Set status bar color
     wattron(rankingWin->window, COLOR_PAIR(rankingWin->color));
@@ -1216,7 +1220,7 @@ void AddScore(Swallow* swallow, char playerName[], char* level, CONFIG_FILE* con
     SaveRanking(rankingList, level);
 }
 
-void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying, CONFIG_FILE* config, char* playerName, char* level, float* timer)
+void PlayAgain(WIN* playWin,WIN* rankingWin, Swallow* swallow, bool* isPlaying, CONFIG_FILE* config, char* playerName, char* level, float* timer)
 {
     int ch;
     char* resultText;
@@ -1228,6 +1232,7 @@ void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying, CONFIG_FILE* con
     else
         resultText = "You have lost!";
 
+    RankingStatus(rankingWin, config, level, playerName);
     AgainScreen(playWin, resultText, config);
 
     while(1)
@@ -1310,7 +1315,7 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,WIN* rankingWin,CONFIG_FIL
     int ch;
     *timer = config->start_time;
 
-    Ranking** rankingList = GetScores(level);
+    RankingStatus(rankingWin, config, level, playerName);
     while(1)
     {
         ch = wgetch(playWin->window);
@@ -1358,7 +1363,6 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,WIN* rankingWin,CONFIG_FIL
         }
         
         UpdateStatus(statusWin, swallow, config);
-        RankingStatus(rankingWin, config, level, playerName);
 
         wrefresh(playWin->window);
         flushinp();
@@ -1452,7 +1456,7 @@ int main()
 
         Update(playWin, statusWin, lifeWin, rankingWin, config, swallow, stars, hunters, safeZone, taxi, boss, level, playerName, timer);
 
-        PlayAgain(playWin, swallow, isPlaying, config, playerName, level, timer);
+        PlayAgain(playWin, rankingWin, swallow, isPlaying, config, playerName, level, timer);
 
         if(!(*isPlaying))
             EndScreen(playWin, config);

@@ -1,18 +1,18 @@
-start time = 60
-seed = 42
+start time = 40
+seed = 41
 window rows = 40
 window cols = 120
-max stars count = 10
+max stars count = 20
 max stars speed = 2
 stars scoring weight = 1
 max hunters size = 3
-max hunters count = 10
+max hunters count = 8
 max hunters speed = 2
 max hunters bounds = 6
 max swallow health = 3
 hunter attack after time = 1
 albatros taxi speed = 2
-max boss speed = 3
+max boss speed = 1
 boss enter part = 3
 boss damage = 1
 
