@@ -20,6 +20,7 @@
 #define OFFY		5		            // Y offset from top of screen
 #define LIFEWINY    3		            // Height of life status window
 #define OFFX		5		            // X offset from left of screen
+#define RANKING_COLS 20
 
 #define MAIN_COLOR	            1		// Main window color
 #define STAT_COLOR	            2		// Status bar color
@@ -104,7 +105,7 @@ typedef struct {
     WIN* playWin;               // Play Window where SafeZone is shown
     int x, y;		            // Position on screen
     int range;		            // Range of the safe zone circle
-    bool active;		    // Time of zone being active
+    bool active;		        
     int color;                  // Color of the safe zone
 } SafeZone;
 
@@ -966,6 +967,27 @@ Hunter** InitHunters(WIN* playWin, int color, Swallow* swallow, CONFIG_FILE* con
     
 }
 
+Ranking** GetScores()
+{
+    char line[180];
+    FILE* f = fopen("./ranking", "r+");
+
+    Ranking** rankingList = (Ranking**)malloc(sizeof(Ranking*) * 100);
+
+    int i = 0;
+    while (fgets(line, sizeof(line), f))
+    {
+        Ranking* playerRanking = (Ranking*)malloc(sizeof(Ranking));
+        sscanf(line, "%d %s %f", &playerRanking->index, playerRanking->nick, &playerRanking->points);
+        rankingList[i++] = playerRanking;
+    }
+    fclose(f);
+
+    rankingList[i] = NULL;
+
+    return rankingList;
+}
+
 WINDOW* Start()
 {
     WINDOW* win;
@@ -1000,6 +1022,30 @@ WINDOW* Start()
 
     return win;
 
+}
+
+void RankingStatus(WIN* rankingWin,CONFIG_FILE* config, char* level)
+{
+    // Set status bar color
+    wattron(rankingWin->window, COLOR_PAIR(rankingWin->color));
+
+    // Draw border around status bar
+    box(rankingWin->window, 0, 0);
+
+    char levelInfo[50], rankingInfo[50];
+    snprintf(levelInfo, sizeof(levelInfo), "Level: %s", level);
+
+    // Display status info
+    mvwprintw(rankingWin->window, 1, 2, levelInfo);
+
+    Ranking** ranking = GetScores();
+    for (int i = 0; ranking[i] != NULL; i++)
+    {
+        snprintf(rankingInfo, sizeof(rankingInfo), "%d %s %f", ranking[i]->index, ranking[i]->nick, ranking[i]->points);
+    }
+
+    // Update display
+    wrefresh(rankingWin->window);
 }
 
 void UpdateStatus(WIN* statusWin, Swallow* swallow, CONFIG_FILE* config)
@@ -1085,27 +1131,6 @@ void AgainScreen(WIN* playWin, char *resultText, CONFIG_FILE* config)
 
 	// Update display
 	wrefresh(playWin->window);
-}
-
-Ranking** GetScores()
-{
-    char line[180];
-    FILE* f = fopen("./ranking", "r+");
-
-    Ranking** rankingList = (Ranking**)malloc(sizeof(Ranking*) * 100);
-
-    int i = 0;
-    while(fgets(line, sizeof(line), f))
-    {
-        Ranking* playerRanking = (Ranking*)malloc(sizeof(Ranking));
-        sscanf(line, "%d %s %f", &playerRanking->index, playerRanking->nick, &playerRanking->points);
-        rankingList[i++] = playerRanking;
-    }
-    fclose(f);
-
-    rankingList[i] = NULL;
-
-    return rankingList;
 }
 
 void SortRankingList(Ranking** rankinglist)
@@ -1195,13 +1220,13 @@ void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying, CONFIG_FILE* con
 bool CheckConfigName(char** namesList, char fileName[100])
 {
     for (int i = 0; i < MAX_LEVELS_COUNT && namesList[i]; i++)
-        if (strcmp(namesList[i], fileName))
+        if (strcmp(namesList[i], fileName)==0)
             return true;
 
     return false;
 }
 
-void AskPlayer(char* playerName, char configAdress[100])
+void AskPlayer(char* playerName, char configAdress[100], char* level)
 {
     DIR* dir;
     struct dirent* plik;
@@ -1218,14 +1243,20 @@ void AskPlayer(char* playerName, char configAdress[100])
     {
         printf("\nWybierz poziom trudności:\n");
 
-        for (int i = 0; plik = readdir(dir); i++)
+        int i = 0;
+        while ((plik = readdir(dir)) != NULL && i < MAX_LEVELS_COUNT)
         {
             if (strcmp(plik->d_name, ".") == 0 || strcmp(plik->d_name, "..") == 0)
                 continue;
 
             printf("%s\n", plik->d_name);
-            namesList[i] = plik->d_name;
+
+            namesList[i] = malloc(strlen(plik->d_name) + 1);
+            strcpy(namesList[i], plik->d_name);
+
+            i++;
         }
+
         closedir(dir);
         scanf("%s", fileName);
         strcat(configAdress, "./levels/");
@@ -1234,13 +1265,21 @@ void AskPlayer(char* playerName, char configAdress[100])
     else
         strcpy(configAdress, ".conf");
 
-    if (!CheckConfigName(namesList, fileName))
+    if (CheckConfigName(namesList, fileName))
+    {
+        strcpy(level, fileName);
+    }
+    else
+    {
         strcpy(configAdress, ".conf");
+        strcpy(level, "default");
+    }
+
 
     free(namesList);
 }
 
-void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters, SafeZone* safeZone, TAXI* taxi, Boss* boss)
+void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,WIN* rankingWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters, SafeZone* safeZone, TAXI* taxi, Boss* boss, char* level)
 {
     int ch;
     float *timer = (float*)malloc(sizeof(float));
@@ -1293,21 +1332,19 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
             DrawHunter(playWin, hunters[i], swallow);
         }
         
+        UpdateStatus(statusWin, swallow, config);
+        RankingStatus(rankingWin, config, level);
 
         wrefresh(playWin->window);
-
-        UpdateStatus(statusWin, swallow, config);
-
         flushinp();
-
         usleep(REFRESH_TIME * 1000);
     }
 }
 
 int main()
 {
-    char playerName[100], configAdress[100];
-    AskPlayer(playerName, configAdress);
+    char playerName[100], configAdress[100], level[50];
+    AskPlayer(playerName, configAdress, level);
     CONFIG_FILE* config = getConfigInfo(configAdress);
     srand(config->seed);
     bool* isPlaying = (bool*)malloc(sizeof(bool));
@@ -1315,6 +1352,17 @@ int main()
     while (*isPlaying)
     {
         WINDOW *mainWin = Start();
+
+        WIN *rankingWin = InitWin(
+            mainWin,
+            config->rows,
+            20,
+            OFFY,
+            OFFX + config->cols,
+            PLAY_COLOR,
+            BORDER,
+            0);
+
 
         WIN *lifeWin = InitWin(
             mainWin, 
@@ -1375,7 +1423,7 @@ int main()
         
         wrefresh(mainWin);
 
-        Update(playWin, statusWin, lifeWin, config, swallow, stars, hunters, safeZone, taxi, boss);
+        Update(playWin, statusWin, lifeWin, rankingWin, config, swallow, stars, hunters, safeZone, taxi, boss, level);
 
         PlayAgain(playWin, swallow, isPlaying, config, playerName);
 
