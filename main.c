@@ -130,6 +130,12 @@ typedef struct {
     int bossDamage;             // Damage that boss gives the swallow
 } Boss;
 
+typedef struct{
+    int index;
+    char nick[180];
+    float points;
+}Ranking;
+
 void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
 {
     // Resizing the boss and randomizing his speed to match the level
@@ -1081,7 +1087,88 @@ void AgainScreen(WIN* playWin, char *resultText, CONFIG_FILE* config)
 	wrefresh(playWin->window);
 }
 
-void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying, CONFIG_FILE* config)
+Ranking** GetScores()
+{
+    char line[180];
+    FILE* f = fopen("./ranking", "r+");
+
+    Ranking** rankingList = (Ranking**)malloc(sizeof(Ranking*) * 100);
+
+    int i = 0;
+    while(fgets(line, sizeof(line), f))
+    {
+        Ranking* playerRanking = (Ranking*)malloc(sizeof(Ranking));
+        sscanf(line, "%d %s %f", &playerRanking->index, playerRanking->nick, &playerRanking->points);
+        rankingList[i++] = playerRanking;
+    }
+    fclose(f);
+
+    rankingList[i] = NULL;
+
+    return rankingList;
+}
+
+void SortRankingList(Ranking** rankinglist)
+{
+    for (int i = 0; rankinglist[i] != NULL; i++)
+    {
+        for (int j = 0; rankinglist[j+1] != NULL; j++)
+        {
+            if (rankinglist[j]->points < rankinglist[j + 1]->points)
+            {
+                Ranking* tempRanking = rankinglist[j];
+
+                rankinglist[j] = rankinglist[j + 1];
+                rankinglist[j]->index = j + 1;
+
+                rankinglist[j + 1] = tempRanking;
+                rankinglist[j+1]->index= j+2;
+            }
+        }
+    }
+}
+
+void SaveRanking(Ranking** ranking)
+{
+    FILE* f = fopen("./ranking", "r+");
+    for (int i = 0; ranking[i] != NULL; i++)
+    {
+        fprintf(f, "%d %s %f\n", ranking[i]->index, ranking[i]->nick, ranking[i]->points);
+    }
+    fclose(f);
+}
+
+void AddScore(float points, char playerName[])
+{
+    Ranking** rankingList = GetScores();
+    bool found = false;
+    int i = 0;
+    while (rankingList[i] != NULL)
+    {
+        if (strcmp(rankingList[i]->nick, playerName) == 0)
+        {
+            found = true;
+            rankingList[i]->points += points;
+            break;
+        }
+        i++;
+    }
+
+    // Add new Player
+    if (!found)
+    {
+        rankingList[i] = (Ranking*)malloc(sizeof(Ranking));
+        rankingList[i]->index = i + 1;
+        strcpy(rankingList[i]->nick, playerName);
+        rankingList[i]->points = points;
+        rankingList[i + 1] = NULL;
+    }
+    SortRankingList(rankingList);
+
+    SaveRanking(rankingList);
+}
+
+void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying, CONFIG_FILE* config, char* playerName)
 {
     int ch;
     char* resultText;
@@ -1105,11 +1192,61 @@ void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying, CONFIG_FILE* con
     }
 }
 
+bool CheckConfigName(char** namesList, char fileName[100])
+{
+    for (int i = 0; i < MAX_LEVELS_COUNT && namesList[i]; i++)
+        if (strcmp(namesList[i], fileName))
+            return true;
+
+    return false;
+}
+
+void AskPlayer(char* playerName, char configAdress[100])
+{
+    DIR* dir;
+    struct dirent* plik;
+    char fileName[100];
+
+    char** namesList = (char**)malloc(sizeof(char*) * MAX_LEVELS_COUNT);
+    for (int i = 0; i < MAX_LEVELS_COUNT; i++)
+        namesList[i] = NULL;
+
+    printf("Podaj nazwę gracza: \n");
+    scanf("%s", playerName);
+
+    if (dir = opendir("./levels/"))
+    {
+        printf("\nWybierz poziom trudności:\n");
+
+        for (int i = 0; plik = readdir(dir); i++)
+        {
+            if (strcmp(plik->d_name, ".") == 0 || strcmp(plik->d_name, "..") == 0)
+                continue;
+
+            printf("%s\n", plik->d_name);
+            namesList[i] = plik->d_name;
+        }
+        closedir(dir);
+        scanf("%s", fileName);
+        strcat(configAdress, "./levels/");
+        strcat(configAdress, fileName);
+    }
+    else
+        strcpy(configAdress, ".conf");
+
+    if (!CheckConfigName(namesList, fileName))
+        strcpy(configAdress, ".conf");
+
+    free(namesList);
+}
+
 void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters, SafeZone* safeZone, TAXI* taxi, Boss* boss)
 {
     int ch;
     float *timer = (float*)malloc(sizeof(float));
     *timer = config->start_time;
+
+    Ranking** rankingList = GetScores();
     while(1)
     {
         ch = wgetch(playWin->window);
@@ -1165,54 +1302,6 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,CONFIG_FILE* config, Swall
 
         usleep(REFRESH_TIME * 1000);
     }
-}
-
-bool CheckConfigName(char** namesList, char fileName[100])
-{
-    for (int i = 0; i < MAX_LEVELS_COUNT && namesList[i]; i++)
-        if (strcmp(namesList[i], fileName))
-            return true;
-
-    return false;
-}
-
-void AskPlayer(char* playerName, char configAdress[100])
-{
-    DIR* dir;
-    struct dirent* plik;
-    char fileName[100];
-
-    char** namesList = (char**)malloc(sizeof(char*)*MAX_LEVELS_COUNT);
-    for (int i = 0; i < MAX_LEVELS_COUNT; i++)
-        namesList[i] = NULL;
-
-    printf("Podaj nazwę gracza: \n");
-    scanf("%s", playerName);
-
-    if (dir = opendir("./levels/"))
-    {
-        printf("\nWybierz poziom trudności:\n");
-
-        for (int i = 0;plik = readdir(dir);i++)
-        {
-            if (strcmp(plik->d_name, ".") == 0 || strcmp(plik->d_name, "..") == 0)
-                continue;
-
-            printf("%s\n", plik->d_name);
-            namesList[i] = plik->d_name;
-        }
-        closedir(dir);
-        scanf("%s", fileName);
-        strcat(configAdress, "./levels/");
-        strcat(configAdress, fileName);
-    }
-    else
-        strcpy(configAdress, ".conf");
-
-    if (!CheckConfigName(namesList, fileName))
-        strcpy(configAdress, ".conf");
-
-    free(namesList);
 }
 
 int main()
@@ -1288,7 +1377,7 @@ int main()
 
         Update(playWin, statusWin, lifeWin, config, swallow, stars, hunters, safeZone, taxi, boss);
 
-        PlayAgain(playWin, swallow, isPlaying, config);
+        PlayAgain(playWin, swallow, isPlaying, config, playerName);
 
         if(!(*isPlaying))
             EndScreen(playWin, config);
@@ -1301,11 +1390,11 @@ int main()
             free(stars[i]);
         for (int i = 0; i < config->max_hunters_count; i++)
             free(hunters[i]);
+
         free(stars);
         free(hunters);
         free(playWin);
         free(statusWin);
-        free(lifeWin);
         free(safeZone);
         free(taxi);
     }
