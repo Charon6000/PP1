@@ -14,7 +14,7 @@ hunter attack after time = 1
 albatros taxi speed = 1
 max boss speed = 3
 boss enter part = 1
-boss damage = 2
+boss damage = 1
 
 # Follow the pattern
 # start time = float

@@ -130,6 +130,7 @@ typedef struct {
     int size;		            // Actual size of boss
     bool onTheScreen;		    // Says if the Boss already jumped on the screen True/False
     int bossDamage;             // Damage that boss gives the swallow
+    int animationFrame;
 } Boss;
 
 typedef struct{
@@ -212,18 +213,41 @@ void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
 void DrawBoss(Boss* boss)
 {
     wattron(boss->playWin->window, COLOR_PAIR(boss->color));
-    for (int x = boss->x - 2 * boss->size; x <= boss->x + 2 * boss->size; x++)
+
+    mvwprintw(boss->playWin->window, boss->y, boss->x, " ");
+    mvwprintw(boss->playWin->window, boss->y-1, boss->x, " ");
+
+    for (size_t i = 0; i <= boss->size; i++)
     {
-        for (int y = boss->y - boss->size; y <= boss->y + boss->size; y++)
-        {
-            float dx = (x - boss->x);
-            float dy = (y - boss->y);
-            if (0.25 * dx * dx + dy * dy <= 4 * boss->size * boss->size)
-            {
-                mvwprintw(boss->playWin->window, y, x, " ");
-            }
-        }
+        mvwprintw(boss->playWin->window, boss->y, boss->x + i, " ");
+        mvwprintw(boss->playWin->window, boss->y, boss->x - i, " ");
+        mvwprintw(boss->playWin->window, boss->y - 1, boss->x + i, " ");
+        mvwprintw(boss->playWin->window, boss->y - 1, boss->x - i, " ");
     }
+
+    if (boss->dx > 0)
+    {
+        mvwprintw(boss->playWin->window, boss->y, boss->x + boss->size+1, ">");
+    }
+    else
+    {
+        mvwprintw(boss->playWin->window, boss->y, boss->x - boss->size - 1, ">");
+    }
+
+    if (boss->animationFrame == 0)
+    {
+        mvwprintw(boss->playWin->window, boss->y + 1, boss->x, " ");
+        mvwprintw(boss->playWin->window, boss->y + 2, boss->x, " ");
+    }
+    else if (boss->animationFrame == 2)
+    {
+        mvwprintw(boss->playWin->window, boss->y - 1, boss->x, " ");
+        mvwprintw(boss->playWin->window, boss->y - 2, boss->x, " ");
+    }
+
+    boss->animationFrame++;
+    boss->animationFrame %= 4;
+
 }
 
 void SpawnBoss(Boss* boss, CONFIG_FILE* config, Swallow* swallow)
@@ -236,6 +260,7 @@ void SpawnBoss(Boss* boss, CONFIG_FILE* config, Swallow* swallow)
     boss->enterTime = (config->start_time / config->boss_enter_part);
     boss->onTheScreen = false;
     boss->bossDamage = config->boss_damage;
+    boss->animationFrame = 0;
 }
 
 void CheckBossCollision(Swallow* swallow, Boss* boss, CONFIG_FILE* config, SafeZone* safeZone, float* timer)
