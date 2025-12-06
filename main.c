@@ -20,7 +20,7 @@
 #define OFFY		5		            // Y offset from top of screen
 #define LIFEWINY    3		            // Height of life status window
 #define OFFX		5		            // X offset from left of screen
-#define RANKING_COLS 20
+#define RANKING_COLS 40
 
 #define MAIN_COLOR	            1		// Main window color
 #define STAT_COLOR	            2		// Status bar color
@@ -135,7 +135,9 @@ typedef struct {
 typedef struct{
     int index;
     char nick[180];
-    float points;
+    int points;
+    float timeUsed;
+    int lifeRemaining;
 }Ranking;
 
 void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
@@ -983,7 +985,7 @@ Ranking** GetScores(const char* level)
     while (fgets(line, sizeof(line), f) && i < 100)
     {
         playerRanking = (Ranking*)malloc(sizeof(Ranking));
-        if (sscanf(line, "%d %s %f", &playerRanking->index, playerRanking->nick, &playerRanking->points) != 3)
+        if (sscanf(line, "%d %s %d %f %d", &playerRanking->index, playerRanking->nick, &playerRanking->points, &playerRanking->timeUsed, &playerRanking->lifeRemaining) != 5)
         {
             free(playerRanking);
             continue;
@@ -1047,12 +1049,13 @@ void RankingStatus(WIN* rankingWin,CONFIG_FILE* config, char* level, char player
     // Display status info
     mvwprintw(rankingWin->window, 1, 2, playerName);
     mvwprintw(rankingWin->window, 2, 2, levelInfo);
+    mvwprintw(rankingWin->window, 3, 2, "Nr Nick Pts Tm Lf");
 
     Ranking** ranking = GetScores(level);
-    for (int i = 0; ranking[i] != NULL && i +3 < config->rows; i++)
+    for (int i = 0; ranking[i] != NULL && i +4 < config->rows; i++)
     {
-        snprintf(rankingInfo, sizeof(rankingInfo), "%d %s %.2f", ranking[i]->index, ranking[i]->nick, ranking[i]->points);
-        mvwprintw(rankingWin->window, i+3, 2, rankingInfo);
+        snprintf(rankingInfo, sizeof(rankingInfo), "%d %s %d %.2f %d", ranking[i]->index, ranking[i]->nick, ranking[i]->points, ranking[i]->timeUsed, ranking[i]->lifeRemaining);
+        mvwprintw(rankingWin->window, i+4, 2, rankingInfo);
     }
     // Update display
     wrefresh(rankingWin->window);
@@ -1171,12 +1174,12 @@ void SaveRanking(Ranking** ranking, char* level)
     FILE* f = fopen(address, "w");
     for (int i = 0; ranking[i] != NULL; i++)
     {
-        fprintf(f, "%d %s %f\n", ranking[i]->index, ranking[i]->nick, ranking[i]->points);
+        fprintf(f, "%d %s %d %f %d\n", ranking[i]->index, ranking[i]->nick, ranking[i]->points, ranking[i]->timeUsed, ranking[i]->lifeRemaining);
     }
     fclose(f);
 }
 
-void AddScore(float points, char playerName[], char* level)
+void AddScore(Swallow* swallow, char playerName[], char* level, CONFIG_FILE* config, float * timer)
 {
     Ranking** rankingList = GetScores(level);
     bool found = false;
@@ -1186,7 +1189,12 @@ void AddScore(float points, char playerName[], char* level)
         if (strcmp(rankingList[i]->nick, playerName) == 0)
         {
             found = true;
-            rankingList[i]->points += points;
+            if (rankingList[i]->points < swallow->wallet)
+            {
+                rankingList[i]->points = swallow->wallet;
+                rankingList[i]->timeUsed = config->start_time - *timer;
+                rankingList[i]->lifeRemaining = swallow->hp;
+            }
             break;
         }
         i++;
@@ -1198,7 +1206,9 @@ void AddScore(float points, char playerName[], char* level)
         rankingList[i] = (Ranking*)malloc(sizeof(Ranking));
         rankingList[i]->index = i + 1;
         strcpy(rankingList[i]->nick, playerName);
-        rankingList[i]->points = points;
+        rankingList[i]->points = swallow->wallet;
+        rankingList[i]->timeUsed = config->start_time - *timer;
+        rankingList[i]->lifeRemaining = swallow->hp;
         rankingList[i + 1] = NULL;
     }
     SortRankingList(rankingList);
@@ -1206,14 +1216,14 @@ void AddScore(float points, char playerName[], char* level)
     SaveRanking(rankingList, level);
 }
 
-void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying, CONFIG_FILE* config, char* playerName, char* level)
+void PlayAgain(WIN* playWin, Swallow* swallow, bool* isPlaying, CONFIG_FILE* config, char* playerName, char* level, float* timer)
 {
     int ch;
     char* resultText;
     if (swallow->hp > 0)
     {
         resultText = "You won, congarts!";
-        AddScore(swallow->wallet, playerName, level);
+        AddScore(swallow, playerName, level, config, timer);
     }
     else
         resultText = "You have lost!";
@@ -1295,10 +1305,9 @@ void AskPlayer(char* playerName, char configAdress[100], char* level)
     free(namesList);
 }
 
-void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,WIN* rankingWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters, SafeZone* safeZone, TAXI* taxi, Boss* boss, char* level, char playerName[100])
+void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,WIN* rankingWin,CONFIG_FILE* config, Swallow* swallow, Star** stars, Hunter** hunters, SafeZone* safeZone, TAXI* taxi, Boss* boss, char* level, char playerName[100], float* timer)
 {
     int ch;
-    float *timer = (float*)malloc(sizeof(float));
     *timer = config->start_time;
 
     Ranking** rankingList = GetScores(level);
@@ -1439,9 +1448,11 @@ int main()
         
         wrefresh(mainWin);
 
-        Update(playWin, statusWin, lifeWin, rankingWin, config, swallow, stars, hunters, safeZone, taxi, boss, level, playerName);
+        float* timer = (float*)malloc(sizeof(float));
 
-        PlayAgain(playWin, swallow, isPlaying, config, playerName, level);
+        Update(playWin, statusWin, lifeWin, rankingWin, config, swallow, stars, hunters, safeZone, taxi, boss, level, playerName, timer);
+
+        PlayAgain(playWin, swallow, isPlaying, config, playerName, level, timer);
 
         if(!(*isPlaying))
             EndScreen(playWin, config);
