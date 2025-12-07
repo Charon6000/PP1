@@ -169,8 +169,8 @@ void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
         boss->speed = 1;
 
     // Calculating swallows predicted future velocity
-    float swallows_velocity_x = swallow->dx * swallow->speed;
-    float swallows_velocity_y = swallow->dy * swallow->speed;
+    float swallows_velocity_x = swallow->dx*swallow->speed;
+    float swallows_velocity_y = swallow->dy*swallow->speed;
 
     // Calculating vector from boss to swallow
     float boss_to_swallow_x = swallow->x - boss->x;
@@ -180,21 +180,21 @@ void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
     // We want to find time after which, swallow and boss will be at the same point. 
     // This leads us to formula: | swallow position - boss_position + swallow_vector * time | = bosses_vector * time
     // We are using it to find the time of both boss and swallow predicted travel to meet eachother
-    float swallow_predicted_a = swallows_velocity_x * swallows_velocity_x + swallows_velocity_y * swallows_velocity_y - boss->speed * boss->speed;
-    float swallow_predicted_b = 2 * (boss_to_swallow_x * swallows_velocity_x + boss_to_swallow_y * swallows_velocity_y);
-    float swallow_predicted_c = boss_to_swallow_x * boss_to_swallow_x + boss_to_swallow_y * boss_to_swallow_y;
+    float swallow_predicted_a = swallows_velocity_x*swallows_velocity_x + swallows_velocity_y*swallows_velocity_y - boss->speed*boss->speed;
+    float swallow_predicted_b = 2 * (boss_to_swallow_x*swallows_velocity_x + boss_to_swallow_y*swallows_velocity_y);
+    float swallow_predicted_c = boss_to_swallow_x*boss_to_swallow_x + boss_to_swallow_y*boss_to_swallow_y;
 
     // Calculating the neccesary time with delta (b^2 - 4ac)
     float time;
-    float delta = swallow_predicted_b * swallow_predicted_b - 4 * swallow_predicted_a * swallow_predicted_c;
+    float delta = swallow_predicted_b*swallow_predicted_b - 4*swallow_predicted_a*swallow_predicted_c;
     float delta_res = sqrt(delta);
 
     // We need the time that is positiv, because we are not going back in time ;)
     if (swallow_predicted_a != 0 && delta >= 0)
     {
         // Geting posible solutions from delta
-        float t1 = (-swallow_predicted_b + delta_res) / (2 * swallow_predicted_a);
-        float t2 = (-swallow_predicted_b - delta_res) / (2 * swallow_predicted_a);
+        float t1 = (-swallow_predicted_b + delta_res) / (2*swallow_predicted_a);
+        float t2 = (-swallow_predicted_b - delta_res) / (2*swallow_predicted_a);
         if (t1 > 0)
             time = t1;
         else if (t2 > 0)
@@ -206,8 +206,8 @@ void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
         time = swallow->speed;
 
     // Calculating the meeting point, having the necessary time of the travel
-    float meeting_x = swallow->x + swallows_velocity_x * time;
-    float meeting_y = swallow->y + swallows_velocity_y * time;
+    float meeting_x = swallow->x + swallows_velocity_x*time;
+    float meeting_y = swallow->y + swallows_velocity_y*time;
 
     // We need to know if we are moving boss left or right
     if (boss->x < meeting_x)
@@ -226,7 +226,7 @@ void UpdateBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
         UpdateBoss(boss, swallow, config);
     }
 
-    boss->b = meeting_y - boss->a * meeting_x;
+    boss->b = meeting_y - boss->a*meeting_x;
 }
 
 
@@ -276,7 +276,7 @@ void DrawBoss(Boss* boss)
 void SpawnBoss(Boss* boss, CONFIG_FILE* config, Swallow* swallow)
 {
     boss->playWin = swallow->playWin;
-    boss->x = config->cols * (rand() % 2);
+    boss->x = config->cols*(rand() % 2);
     boss->y = rand() % config->rows;
     boss->color = BOSS_COLOR;
 
@@ -296,17 +296,17 @@ void CheckBossCollision(Swallow* swallow, Boss* boss, CONFIG_FILE* config, SafeZ
     float dx = boss->x - swallow->x;
     float dy = boss->y - swallow->y;
     float minimum_distance = boss->size + swallow->hp;
-    float distance = dx * dx + dy * dy;
+    float distance = dx*dx + dy*dy;
     
     if (safeZone->active) // If the zone is active, cheks collision with it
     {
         dx = boss->x - config->cols / 2;
         dy = boss->y - config->rows / 2;
-        distance = dx * dx + dy * dy;
-        if (distance <= 4 * safeZone->range * safeZone->range)
+        distance = dx*dx + dy*dy;
+        if (distance <= 4*safeZone->range*safeZone->range)
             SpawnBoss(boss, config, swallow);
     }
-    else if (distance <= (minimum_distance * minimum_distance)) // Checks if the distance is samller that acceptable
+    else if (distance <= (minimum_distance*minimum_distance)) // Checks if the distance is samller that acceptable
     {
         // Gives damage to swallow and makes boss to default
         swallow->hp -= boss->bossDamage;
@@ -322,14 +322,14 @@ void BounceBossBack(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
     {
         boss->y = 0;
         boss->a *= -1;
-        boss->b = boss->y - (boss->a * boss->x);
+        boss->b = boss->y - (boss->a*boss->x);
         UpdateBoss(boss, swallow, config);
     }
     else if (boss->y > config->rows - 2)
     {
         boss->y = config->rows - 2;
         boss->a *= -1;
-        boss->b = boss->y - (boss->a * boss->x);
+        boss->b = boss->y - (boss->a*boss->x);
         UpdateBoss(boss, swallow, config);
     }
 
@@ -337,7 +337,7 @@ void BounceBossBack(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
     {
         boss->x = 1;
         boss->a *= -1;
-        boss->b = boss->y - (boss->a * boss->x);
+        boss->b = boss->y - (boss->a*boss->x);
         boss->dx *= -1;
         UpdateBoss(boss, swallow, config);
     }
@@ -345,7 +345,7 @@ void BounceBossBack(Boss* boss, Swallow* swallow, CONFIG_FILE* config)
     {
         boss->x = config->cols - 2;
         boss->a *= -1;
-        boss->b = boss->y - (boss->a * boss->x);
+        boss->b = boss->y - (boss->a*boss->x);
         boss->dx *= -1;
         UpdateBoss(boss, swallow, config);
     }
@@ -366,7 +366,7 @@ void MoveBoss(Boss* boss, Swallow* swallow, CONFIG_FILE* config, SafeZone* safeZ
     {
         // Moves the boss by the linear function
         boss->x += boss->dx;
-        boss->y = (boss->a * boss->x) + boss->b;
+        boss->y = (boss->a*boss->x) + boss->b;
 
         // Tells if boss already entere the screen, later he will collide with frames of the window
         if (!boss->onTheScreen)
@@ -391,10 +391,10 @@ void SpawnHunter(Hunter* tempHunter, Swallow* swallow, CONFIG_FILE* config, floa
 {
     tempHunter->speed = rand() % config->max_hunters_speed + 1;
     tempHunter->onTheScreen = false;
-    tempHunter->x = config->cols * (rand() % 2 );
-    tempHunter->y = rand() % config->rows;
+    tempHunter->x = config->cols*(rand() % 2 );
+    tempHunter->y = rand()%config->rows;
     tempHunter->huntersStage = 0;
-    tempHunter->size = rand() % config->max_hunters_size + 1;
+    tempHunter->size = rand()%config->max_hunters_size + 1;
     tempHunter->hunterWaitTime = 0;
     tempHunter->animationFrame = 0;
 
@@ -432,7 +432,7 @@ CONFIG_FILE* getConfigInfo(char* adress)
     if (!ofile)
     {
         printf("The .conf file can't be found. Please add configuration file to play a game.");
-        return cfile;
+        exit(1);
     }
 
     // Skans arguments from file to the CONFIG_FILE structure
@@ -482,11 +482,11 @@ CONFIG_FILE* getConfigInfo(char* adress)
 // Cheks if stars collide with swallow
 void CheckStarsCollision(Swallow* swallow, Star* star, CONFIG_FILE* config)
 {
-    float dx = star->x-swallow->x;
-    float dy = star->y-swallow->y;
+    float dx = star->x - swallow->x;
+    float dy = star->y - swallow->y;
 
     // Cheks if the distance between star and swallow if lower than acceptable
-    if((dx*dx+dy*dy) <= (swallow->hp * swallow->hp))
+    if((dx*dx+dy*dy) <= swallow->hp*swallow->hp)
     {
         // Respawn the star to the top
         star->y = -10;
@@ -519,7 +519,7 @@ void CheckHuntersCollision(Swallow* swallow, Hunter* hunter, CONFIG_FILE* config
         SpawnHunter(hunter, swallow, config, timer);
         swallow->hp -= 1;
     }
-    else if (distance <= 4 * (second_minimum_distance * second_minimum_distance) && hunter->huntersStage == 0)// Checks if the distance is samaler that acceptable for swallow detection
+    else if (distance <= 4*(second_minimum_distance * second_minimum_distance) && hunter->huntersStage == 0)// Checks if the distance is samaler that acceptable for swallow detection
     {
         // Starts the following procedure
         hunter->huntersStage = 1;
@@ -557,8 +557,8 @@ void SetSafeZone(SafeZone* zone, Swallow* swallow, bool active, CONFIG_FILE* con
 {
     zone->playWin = swallow->playWin;
     zone->range = swallow->hp;
-    zone->x = config->cols / 2;
-    zone->y = config->rows / 2;
+    zone->x = config->cols/2;
+    zone->y = config->rows/2;
     zone->active = active;
     zone->color = SAFE_ZONE_COLOR;
 }
@@ -823,7 +823,7 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
         for (int i = 0; i < hunter->speed; i++)
         {
             hunter->x += hunter->dx;
-            hunter->y = (hunter->a * hunter->x) + hunter->b;
+            hunter->y = (hunter->a*hunter->x) + hunter->b;
 
             if (hunter->onTheScreen == 0)
             {
@@ -845,6 +845,7 @@ void MoveHunter(Hunter* hunter, Swallow* swallow, CONFIG_FILE* config,SafeZone* 
         if (hunter->hunterWaitTime - *timer < config->hunter_attack_after_time)
         {
             hunter->speed = 0;
+            DrawHunter(hunter, swallow);
             return;
         }
 
@@ -913,14 +914,14 @@ void DrawSafeZone(SafeZone* safeZone, Swallow* swallow, CONFIG_FILE* config)
             float dx = (x - safeZone->x);
             float dy = (y - safeZone->y);
 
-            if (0.25 * dx * dx + dy * dy <= 4 * safeZone->range * safeZone->range) // draw the circle if fragment in range
+            if (0.25*dx*dx+dy*dy <= 4*safeZone->range*safeZone->range) // draw the circle if fragment in range
             {
                 dx = x - swallow->x;
                 dy = y - swallow->y;
 
-                float distance = dx * dx + dy * dy;
+                float distance = dx*dx + dy*dy;
                 // if doesnt collide with swallow, draw fragment. It is neccesary to actually see the swallow in the circle
-                if (distance > swallow->hp * swallow->hp * 2)
+                if (distance > swallow->hp*swallow->hp*2)
                 {
                     mvwprintw(safeZone->playWin->window, y, x, " ");
                 }
@@ -989,14 +990,14 @@ void MoveTaxi(TAXI* taxi, Swallow* swallow, SafeZone* safeZone, CONFIG_FILE* con
     else
     {
         // set direction to the start point of the taxi
-        x = config->cols / 2;
+        x = config->cols/2;
         y = -1;
     }
 
     // calculate distance between taxi and direction point
     taxi->dx = x - taxi->x;
     taxi->dy = y - taxi->y;
-    float distance = sqrt(taxi->dx * taxi->dx + taxi->dy * taxi->dy);
+    float distance = sqrt(taxi->dx*taxi->dx + taxi->dy*taxi->dy);
 
     // go to the next stage if previous is done
     if (distance <= swallow->hp)
@@ -1008,8 +1009,8 @@ void MoveTaxi(TAXI* taxi, Swallow* swallow, SafeZone* safeZone, CONFIG_FILE* con
     }
 
     // move taxi by directions and speed
-    taxi->x += taxi->dx * taxi->speed;
-    taxi->y += taxi->dy * taxi->speed;
+    taxi->x += taxi->dx*taxi->speed;
+    taxi->y += taxi->dy*taxi->speed;
 
     DrawTaxi(taxi);
 }
@@ -1330,13 +1331,13 @@ void SortRankingList(Ranking** rankinglist)
         for (int j = 0; rankinglist[j+1] != NULL; j++)
         {
             // check if ranking points on left are lower than the points at the right
-            if (rankinglist[j]->points < rankinglist[j + 1]->points)
+            if (rankinglist[j]->points < rankinglist[j+1]->points)
             {
                 // swap places of rankings
                 Ranking* tempRanking = rankinglist[j];
 
-                rankinglist[j] = rankinglist[j + 1];
-                rankinglist[j]->index = j + 1;
+                rankinglist[j] = rankinglist[j+1];
+                rankinglist[j]->index = j+1;
 
                 rankinglist[j + 1] = tempRanking;
                 rankinglist[j+1]->index= j+2;
@@ -1454,7 +1455,7 @@ void AskPlayer(char* playerName, char configAdress[100], char* level)
     struct dirent* plik;
     char fileName[100];
 
-    char** namesList = (char**)malloc(sizeof(char*) * MAX_LEVELS_COUNT);// Allocate memory for names
+    char** namesList = (char**)malloc(sizeof(char*)*MAX_LEVELS_COUNT);// Allocate memory for names
     for (int i = 0; i < MAX_LEVELS_COUNT; i++)
         namesList[i] = NULL;
 
@@ -1566,7 +1567,7 @@ void Update(WIN *playWin, WIN *statusWin,WIN* lifeWin,WIN* rankingWin,CONFIG_FIL
 
         wrefresh(playWin->window);// refresh changes on the screen
         flushinp();
-        usleep(REFRESH_TIME * 1000);// refresh cooldown for 0.1 second
+        usleep(REFRESH_TIME*1000);// refresh cooldown for 0.1 second
     }
 }
 
@@ -1593,52 +1594,6 @@ void CleanupGameResources(WIN* rankingWin, WIN* lifeWin, WIN* playWin, WIN* stat
 }
 
 
-// Generates windows inside the main window
-void GenerateWindows(WINDOW* mainWin, WIN** rankingWin, WIN** lifeWin, WIN** playWin, WIN** statusWin, CONFIG_FILE* config)
-{
-    *rankingWin = InitWin(
-        mainWin,
-        config->rows,
-        20,
-        OFFY,
-        OFFX + config->cols,
-        RANKING_COLOR,
-        BORDER,
-        0);
-
-
-    *lifeWin = InitWin(
-        mainWin,
-        LIFEWINY,
-        config->cols / 2,
-        LIFEWINY - 1,
-        OFFY + config->cols / 4,
-        STAT_COLOR,
-        BORDER,
-        0);
-
-    *playWin = InitWin(
-        mainWin,
-        config->rows,
-        config->cols,
-        OFFY,
-        OFFX,
-        PLAY_COLOR,
-        BORDER,
-        0);
-
-    *statusWin = InitWin(
-        mainWin,
-        OFFY,
-        config->cols,
-        config->rows + OFFY,
-        OFFX,
-        STAT_COLOR,
-        BORDER,
-        0);
-}
-
-
 // Main function
 int main()
 {
@@ -1652,42 +1607,31 @@ int main()
 
     while (*isPlaying)
     {
-        // setting deafult parameters
+        // setting deafult parameters and generating windows
         WINDOW *mainWin = Start();
 
-        WIN* rankingWin = NULL;
-        WIN* lifeWin = NULL;
-        WIN* playWin = NULL;
-        WIN* statusWin = NULL;
-        GenerateWindows(mainWin, &rankingWin, &lifeWin, &playWin, &statusWin, config);
+        WIN *rankingWin = InitWin(mainWin,  config->rows,   20,             OFFY,                       OFFX + config->cols,        RANKING_COLOR,      BORDER, 0);
+        WIN *lifeWin =    InitWin(mainWin,  LIFEWINY,       config->cols/2, LIFEWINY - 1,               OFFY + config->cols / 4,    STAT_COLOR,         BORDER, 0);
+        WIN *playWin =    InitWin(mainWin,  config->rows,   config->cols,   OFFY,                       OFFX,                       PLAY_COLOR,         BORDER, 0);
+        WIN *statusWin =  InitWin(mainWin,  OFFY,           config->cols,   config->rows + OFFY,        OFFX,                       STAT_COLOR,         BORDER, 0);
 
-        Swallow* swallow = InitSwallow(
-            playWin,
-            config->cols/2,
-            config->rows/2,
-            0,
-            -1,
-            START_PLAYER_SPEED,
-            SWALLOW_COLOR,
-            config
-        );
+        Swallow* swallow = InitSwallow(playWin, config->cols/2,config->rows/2,0,-1,START_PLAYER_SPEED,SWALLOW_COLOR,config);//  create swallow
 
         Boss* boss = (Boss*)malloc(sizeof(Boss));
         SpawnBoss(boss, config, swallow);
-
         UpdateBoss(boss, swallow, config);
 
         Star** stars = InitStars(playWin, STAR_COLOR, STAR2_COLOR, config);
         
         Hunter** hunters = InitHunters(playWin, HUNTER_COLOR, swallow, config);
 
-        SafeZone* safeZone = (SafeZone*)malloc(sizeof(SafeZone));
-        TAXI* taxi = (TAXI*)malloc(sizeof(TAXI));
+        SafeZone* safeZone = (SafeZone*)malloc(sizeof(SafeZone));// allocate memory for safe zone
+        TAXI* taxi = (TAXI*)malloc(sizeof(TAXI));// allocate memory for taxi
 
         SetSafeZone(safeZone, swallow, false, config);
         SetTaxi(taxi, swallow, config);
         
-        wrefresh(mainWin);
+        wrefresh(mainWin);// Refresh main window to show changes
 
         float* timer = (float*)malloc(sizeof(float));// allocate memory for timer
 
@@ -1698,7 +1642,7 @@ int main()
         if(!(*isPlaying))
             EndScreen(playWin, config);
 
-        endwin();
+        endwin();// end of displaying any window
 
         CleanupGameResources(rankingWin, lifeWin, playWin, statusWin, swallow, stars, hunters, boss, safeZone, taxi, timer, config);
     }
